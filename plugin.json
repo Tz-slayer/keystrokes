@@ -3,7 +3,7 @@
     "name": "Screenkey",
     "icon": "keyboard",
     "description": "Displays keystrokes on screen in a readable format for tutorials",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "author": "Loc Huynh",
     "type": "composite",
     "capabilities": [
