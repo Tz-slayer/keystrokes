@@ -58,6 +58,11 @@ PluginComponent {
     readonly property string requiredTool: selectedDevicePath === "all" ? "libinput" : "evtest"
 
     Component.onCompleted: {
+        if (!pluginService.pluginInstances[pluginId]) {
+            const newInstances = Object.assign({}, pluginService.pluginInstances);
+            newInstances[pluginId] = root;
+            pluginService.pluginInstances = newInstances;
+        }
         checkTools();
     }
 
@@ -298,5 +303,22 @@ PluginComponent {
         id: overlay
         daemon: root
         visible: root.enabled && overlay.isOverlayVisible
+    }
+
+    Component.onDestruction: {
+        if (pluginService.pluginInstances[pluginId] === root) {
+            const newInstances = Object.assign({}, pluginService.pluginInstances);
+            delete newInstances[pluginId];
+            pluginService.pluginInstances = newInstances;
+        }
+    }
+
+    function saveSetting(key, value) {
+        try {
+            pluginService.savePluginData(pluginId, key, value);
+            if (pluginData) pluginData[key] = value;
+        } catch(e) {
+            console.warn("[Screenkey] Failed to save setting:", key, e);
+        }
     }
 }
