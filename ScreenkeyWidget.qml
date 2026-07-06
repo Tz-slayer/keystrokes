@@ -18,7 +18,8 @@ PluginComponent {
 
     readonly property var daemon: PluginService.pluginInstances["screenkey"]
     property var deviceOptions: []
-    property bool _devInit: false
+    property bool devicesScanning: true
+    readonly property string autoDeviceLabel: I18n.tr("All Keyboards (Auto)")
 
     function scanDevices() {
         const script = `
@@ -50,17 +51,29 @@ if os.path.exists('/proc/bus/input/devices'):
                     devs.append((name + " (" + event_path.split('/')[-1] + ")", event_path))
 print(json.dumps(devs))
 `;
+        const defaultOptions = [{ label: root.autoDeviceLabel, value: "all" }];
+        root.devicesScanning = true;
+
         Proc.runCommand("screenkey.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
-            if (exitCode !== 0) return;
+            if (exitCode !== 0) {
+                console.warn("[Screenkey] scanDevices command failed with exit code:", exitCode, stdout);
+                root.deviceOptions = defaultOptions;
+                root.devicesScanning = false;
+                return;
+            }
             try {
                 const data = JSON.parse(stdout.trim());
-                var options = [{ label: "All Keyboards (Auto)", value: "all" }];
+                var options = defaultOptions.slice();
                 for (var i = 0; i < data.length; i++) {
                     options.push({ label: data[i][0], value: data[i][1] });
                 }
                 root.deviceOptions = options;
-                root._devInit = true;
-            } catch(e) {}
+            } catch(e) {
+                console.warn("[Screenkey] Failed to parse scanDevices output:", e, stdout);
+                root.deviceOptions = defaultOptions;
+            } finally {
+                root.devicesScanning = false;
+            }
         });
     }
 
@@ -162,13 +175,16 @@ print(json.dumps(devs))
                     DankDropdown {
                         width: parent.width
                         compactMode: true
+                        enabled: !root.devicesScanning
                         currentValue: {
+                            if (root.devicesScanning)
+                                return I18n.tr("Scanning devices…");
                             var cur = root.daemon ? root.daemon.selectedDevicePath : "all";
                             for (var i = 0; i < root.deviceOptions.length; i++) {
                                 if (root.deviceOptions[i].value === cur)
                                     return root.deviceOptions[i].label;
                             }
-                            return "All Keyboards (Auto)";
+                            return root.autoDeviceLabel;
                         }
                         options: root.deviceOptions.map(function(o) { return o.label; })
                         onValueChanged: (newValue) => {
@@ -191,46 +207,56 @@ print(json.dumps(devs))
 
                     DankToggle {
                         text: I18n.tr("Normal Keys")
-                        checked: root.daemon ? root.daemon.showNormalKeys : false
                         onToggled: {
                             if (root.daemon)
                                 root.daemon.saveSetting("showNormalKeys", checked);
+                        }
+                        Binding on checked {
+                            value: root.daemon ? root.daemon.showNormalKeys : false
                         }
                     }
 
                     DankToggle {
                         text: I18n.tr("Mouse Clicks")
-                        checked: root.daemon ? root.daemon.showMouseClicks : false
                         onToggled: {
                             if (root.daemon)
                                 root.daemon.saveSetting("showMouseClicks", checked);
+                        }
+                        Binding on checked {
+                            value: root.daemon ? root.daemon.showMouseClicks : false
                         }
                     }
 
                     DankToggle {
                         text: I18n.tr("Shortcuts")
-                        checked: root.daemon ? root.daemon.showShortcuts : true
                         onToggled: {
                             if (root.daemon)
                                 root.daemon.saveSetting("showShortcuts", checked);
+                        }
+                        Binding on checked {
+                            value: root.daemon ? root.daemon.showShortcuts : true
                         }
                     }
 
                     DankToggle {
                         text: I18n.tr("macOS Symbols")
-                        checked: root.daemon ? root.daemon.macSymbols : false
                         onToggled: {
                             if (root.daemon)
                                 root.daemon.saveSetting("macSymbols", checked);
+                        }
+                        Binding on checked {
+                            value: root.daemon ? root.daemon.macSymbols : false
                         }
                     }
 
                     DankToggle {
                         text: I18n.tr("Held Modifiers")
-                        checked: root.daemon ? root.daemon.showModifierStatus : false
                         onToggled: {
                             if (root.daemon)
                                 root.daemon.saveSetting("showModifierStatus", checked);
+                        }
+                        Binding on checked {
+                            value: root.daemon ? root.daemon.showModifierStatus : false
                         }
                     }
                 }

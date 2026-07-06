@@ -306,7 +306,7 @@ PluginComponent {
     }
 
     Component.onDestruction: {
-        if (pluginService.pluginInstances[pluginId] === root) {
+        if (pluginService && pluginService.pluginInstances && pluginService.pluginInstances[pluginId] === root) {
             const newInstances = Object.assign({}, pluginService.pluginInstances);
             delete newInstances[pluginId];
             pluginService.pluginInstances = newInstances;
