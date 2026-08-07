@@ -13,6 +13,26 @@ PluginComponent {
     pluginId: "screenkey"
     pluginService: PluginService
 
+    IpcHandler {
+        target: "screenkey"
+        enabled: true
+
+        function toggle(): string {
+            root.saveSetting("enabled", !root.enabled);
+            return "SUCCESS";
+        }
+
+        function enable(): string {
+            root.saveSetting("enabled", true);
+            return "SUCCESS";
+        }
+
+        function disable(): string {
+            root.saveSetting("enabled", false);
+            return "SUCCESS";
+        }
+    }
+
     // Configurable settings
     readonly property bool enabled: root.pluginData.enabled ?? true
     readonly property int fadeTimeout: root.pluginData.fadeTimeout ?? 1500
