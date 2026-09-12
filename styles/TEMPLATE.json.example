@@ -1,0 +1,12 @@
+{
+    "name": "My Style",
+    "type": "elevated",
+    "baseColor": "#2a2e33",
+    "secondaryColor": "#16181b",
+    "textColor": "#e6e6e6",
+    "borderColor": "#3a3f46",
+    "borderWidth": 1,
+    "cornerRadius": 0.35,
+    "gradient": true,
+    "shadowOpacity": 0.35
+}

@@ -1,9 +1,9 @@
 {
-    "id": "screenkey",
-    "name": "Screenkey",
+    "id": "keyviz",
+    "name": "Keyviz",
     "icon": "keyboard",
-    "description": "Displays keystrokes on screen in a readable format for tutorials",
-    "version": "1.0.7",
+    "description": "Displays keystrokes on screen with keyviz-style animations, for tutorials",
+    "version": "1.2.0",
     "author": "Loc Huynh",
     "type": "composite",
     "capabilities": [
@@ -11,10 +11,10 @@
         "control-center"
     ],
     "components": {
-        "daemon": "./ScreenkeyDaemon.qml",
-        "widget": "./ScreenkeyWidget.qml"
+        "daemon": "./KeyvizDaemon.qml",
+        "widget": "./KeyvizWidget.qml"
     },
-    "settings": "./ScreenkeySettings.qml",
+    "settings": "./KeyvizSettings.qml",
     "requires_dms": ">=1.5.0",
     "permissions": [
         "settings_read",

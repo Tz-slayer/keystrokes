@@ -13,10 +13,10 @@ import "./dms-common"
 PluginComponent {
     id: root
 
-    pluginId: "screenkey"
+    pluginId: "keyviz"
     pluginService: PluginService
 
-    readonly property var daemon: PluginService.pluginInstances["screenkey"]
+    readonly property var daemon: PluginService.pluginInstances["keyviz"]
     property var deviceOptions: []
     property bool devicesScanning: true
     readonly property string autoDeviceLabel: I18n.tr("All Keyboards (Auto)")
@@ -54,9 +54,9 @@ print(json.dumps(devs))
         const defaultOptions = [{ label: root.autoDeviceLabel, value: "all" }];
         root.devicesScanning = true;
 
-        Proc.runCommand("screenkey.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
+        Proc.runCommand("keyviz.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
             if (exitCode !== 0) {
-                console.warn("[Screenkey] scanDevices command failed with exit code:", exitCode, stdout);
+                console.warn("[Keyviz] scanDevices command failed with exit code:", exitCode, stdout);
                 root.deviceOptions = defaultOptions;
                 root.devicesScanning = false;
                 return;
@@ -69,7 +69,7 @@ print(json.dumps(devs))
                 }
                 root.deviceOptions = options;
             } catch(e) {
-                console.warn("[Screenkey] Failed to parse scanDevices output:", e, stdout);
+                console.warn("[Keyviz] Failed to parse scanDevices output:", e, stdout);
                 root.deviceOptions = defaultOptions;
             } finally {
                 root.devicesScanning = false;
@@ -82,7 +82,7 @@ print(json.dumps(devs))
     }
 
     ccWidgetIcon: "keyboard"
-    ccWidgetPrimaryText: I18n.tr("Screenkey")
+    ccWidgetPrimaryText: I18n.tr("Keyviz")
     ccWidgetSecondaryText: daemon && daemon.enabled ? I18n.tr("Active") : I18n.tr("Disabled")
     ccWidgetIsActive: daemon ? daemon.enabled : false
     ccDetailHeight: 360
@@ -111,7 +111,7 @@ print(json.dumps(devs))
 
                 StyledText {
                     id: headerLabel
-                    text: I18n.tr("Screenkey")
+                    text: I18n.tr("Keyviz")
                     font.pixelSize: Theme.fontSizeLarge
                     font.weight: Font.Medium
                     color: Theme.surfaceText

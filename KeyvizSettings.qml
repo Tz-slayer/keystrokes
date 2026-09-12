@@ -7,16 +7,34 @@ import qs.Services
 import qs.Widgets
 import "./dms-common"
 
-PluginSettings {
-    id: root
+    PluginSettings {
+        id: root
 
-    pluginId: "screenkey"
+        pluginId: "keyviz"
+
+        // Daemon instance (for custom style list)
+        readonly property var daemon: PluginService.pluginInstances["keyviz"]
+
+        readonly property var styleOptions: {
+            var opts = [
+                { label: I18n.tr("Minimal"), value: "minimal" },
+                { label: I18n.tr("Elevated"), value: "elevated" },
+                { label: I18n.tr("Mechanical"), value: "mechanical" }
+            ];
+            const cs = daemon ? daemon.customStyles : {};
+            for (const id in cs)
+                opts.push({ label: (cs[id].name || id) + I18n.tr(" (custom)"), value: id });
+            return opts;
+        }
+
 
     // Keyboard devices scanned dynamically
     property var deviceOptions: [{ label: "All Keyboards (Auto)", value: "all" }]
 
     Component.onCompleted: {
         scanDevices();
+        if (root.daemon)
+            root.daemon.scanStyles();
     }
 
     function scanDevices() {
@@ -60,7 +78,7 @@ if os.path.exists('/proc/bus/input/devices'):
 
 print(json.dumps(devs))
 `;
-        Proc.runCommand("screenkey.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
+        Proc.runCommand("keyviz.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
             if (exitCode !== 0) return;
             try {
                 const data = JSON.parse(stdout.trim());
@@ -70,7 +88,7 @@ print(json.dumps(devs))
                 }
                 root.deviceOptions = options;
             } catch(e) {
-                console.warn("[Screenkey] Failed to parse device scanner output:", e);
+                console.warn("[Keyviz] Failed to parse device scanner output:", e);
             }
         });
     }
@@ -130,10 +148,12 @@ print(json.dumps(devs))
         SectionTitle {
             text: I18n.tr("Layout & Animations")
             icon: "display_settings"
-            showReset: positionSetting.isDirty || animationTypeSetting.isDirty || roundedKeycapsSetting.isDirty || overlayOpacitySetting.isDirty || marginSizeSetting.isDirty || charLimitSetting.isDirty || textColorSetting.isDirty || keycapTextColorSetting.isDirty || historyLimitSetting.isDirty || bgColorSetting.isDirty || customSeparatorSetting.isDirty
+            showReset: positionSetting.isDirty || animationTypeSetting.isDirty || animationDurationSetting.isDirty || keycapStyleSetting.isDirty || roundedKeycapsSetting.isDirty || overlayOpacitySetting.isDirty || marginSizeSetting.isDirty || charLimitSetting.isDirty || textColorSetting.isDirty || keycapTextColorSetting.isDirty || historyLimitSetting.isDirty || bgColorSetting.isDirty || customSeparatorSetting.isDirty
             onResetClicked: {
                 positionSetting.resetToDefault();
                 animationTypeSetting.resetToDefault();
+                animationDurationSetting.resetToDefault();
+                keycapStyleSetting.resetToDefault();
                 roundedKeycapsSetting.resetToDefault();
                 overlayOpacitySetting.resetToDefault();
                 marginSizeSetting.resetToDefault();
@@ -164,16 +184,44 @@ print(json.dumps(devs))
         Separator {}
 
         SelectionSettingPlus {
+            id: keycapStyleSetting
+            settingKey: "keycapStyle"
+            label: I18n.tr("Keycap Style")
+            description: I18n.tr("Keycap skin (keyviz Minimal / Elevated / Mechanical). Add custom styles: drop a JSON file into ~/.config/DankMaterialShell/keyviz_styles/ and reopen this page")
+            options: root.styleOptions
+            defaultValue: "mechanical"
+        }
+
+        Separator {}
+
+        SelectionSettingPlus {
             id: animationTypeSetting
             settingKey: "animationType"
             label: I18n.tr("Animation Style")
+            description: I18n.tr("Keyviz-style preset applied when keycaps enter and leave the overlay")
             options: [
+                { label: I18n.tr("Fade"), value: "fade" },
                 { label: I18n.tr("Zoom"), value: "zoom" },
-                { label: I18n.tr("Fade Only"), value: "fade" },
+                { label: I18n.tr("Float"), value: "float" },
                 { label: I18n.tr("Slide"), value: "slide" },
                 { label: I18n.tr("None"), value: "none" }
             ]
-            defaultValue: "none"
+            defaultValue: "fade"
+        }
+
+        Separator {}
+
+        SliderSettingPlus {
+            id: animationDurationSetting
+            settingKey: "animationDuration"
+            label: I18n.tr("Animation Duration")
+            description: I18n.tr("Duration of the keycap enter/exit animations")
+            minimum: 100
+            maximum: 1000
+            defaultValue: 250
+            unit: "ms"
+            leftLabel: "100ms"
+            rightLabel: "1000ms"
         }
 
         Separator {}
@@ -405,9 +453,12 @@ print(json.dumps(devs))
 
             Repeater {
                 model: [
-                    { text: "dms ipc screenkey toggle", label: I18n.tr("Toggle visualizer") },
-                    { text: "dms ipc screenkey enable", label: I18n.tr("Enable visualizer") },
-                    { text: "dms ipc screenkey disable", label: I18n.tr("Disable visualizer") }
+                    { text: "dms ipc keyviz toggle", label: I18n.tr("Toggle visualizer") },
+                    { text: "dms ipc keyviz enable", label: I18n.tr("Enable visualizer") },
+                    { text: "dms ipc keyviz disable", label: I18n.tr("Disable visualizer") },
+                    { text: "dms ipc keyviz test", label: I18n.tr("Preview a sample keystroke") },
+                    { text: "dms ipc keyviz styles", label: I18n.tr("List loaded custom styles") },
+                    { text: "dms ipc keyviz rescan", label: I18n.tr("Rescan the custom style folder") }
                 ]
 
                 delegate: CopyBox {
