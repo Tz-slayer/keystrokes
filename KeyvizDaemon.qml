@@ -45,6 +45,7 @@ PluginComponent {
 
         // Show a sample keystroke without pressing anything (style preview).
         // Cycles: shortcut combo -> mouse click -> typing -> modifier + arrow.
+        // Each keycap is briefly "held" so the keyviz press animation plays too.
         function test(): string {
             if (!root.enabled)
                 root.saveSetting("enabled", true);
@@ -56,8 +57,10 @@ PluginComponent {
                 root.handleKeyPress("KEY_T");
                 root.ctrlActive = false;
                 root.altActive = false;
+                root.previewPress(["Ctrl", "Alt", "T"]);
             } else if (mode === 2) {
                 root.addKeystroke("LMB Click", false);
+                root.previewPress(["LMB Click"]);
             } else if (mode === 3) {
                 root.textBuffer = "hello world";
                 root.addKeystroke("hello world", false);
@@ -65,6 +68,7 @@ PluginComponent {
                 root.superActive = true;
                 root.handleKeyPress("KEY_UP");
                 root.superActive = false;
+                root.previewPress(["Super", "↑"]);
             }
             return "SUCCESS";
         }
@@ -94,11 +98,26 @@ PluginComponent {
     readonly property bool ignoreFilterKeys: root.pluginData.ignoreFilterKeys ?? true
     readonly property bool macSymbols: root.pluginData.macSymbols ?? false
     readonly property bool showModifierStatus: root.pluginData.showModifierStatus ?? false
-    readonly property string customSeparator: root.pluginData.customSeparator ?? "+"
+    // keyviz: key_style.ts -> layout.showPressCount, default true
+    readonly property bool showPressCount: root.pluginData.showPressCount ?? true
+    // keyviz puts no separator between caps, only a gap (key-overlay.tsx:
+    // `columnGap: text.size * 0.3`). Default to empty to match; set it to "+"
+    // or anything else to get the old behaviour back.
+    readonly property string customSeparator: root.pluginData.customSeparator ?? ""
     readonly property int historyLimit: root.pluginData.historyLimit ?? 1
     readonly property string bgColorMode: root.pluginData.bgColorMode ?? "default"
     readonly property string bgColorCustom: root.pluginData.bgColorCustom ?? "#1e2326"
     property var historyList: []
+
+    // Consecutive-repeat counter behind the keyviz press-count badge.
+    property string lastKeystrokeText: ""
+    property int repeatCount: 1
+
+    // ── physically held keys (keyviz `pressedKeys`) ──
+    // Display labels of the keys currently held down, in press order. The
+    // overlay reads this to play the keyviz press animation on the matching
+    // keycap, and it keeps the overlay alive while a displayed key is held.
+    property var heldKeys: []
 
     // Monotonic id so the overlay can tell "new group" (animate in) apart
     // from "text updated in place" (e.g. the typing buffer growing)
@@ -113,6 +132,12 @@ PluginComponent {
     // Resolved skin parameters consumed by the overlay's Keycap renderer.
     // Built-ins use the keyviz look (white cap / dark base, theme-independent);
     // custom styles fall back per-field to the defaults of their type.
+    //
+    // borderWidth/borderColor outline the cap face and the base wall. keyviz
+    // ships the same thing by default (key_style.ts: border.enabled true,
+    // width 2, #1a1a1a); 1px #3d3d3d is the same idea tuned down so it stays a
+    // crisp edge instead of a heavy ring. Without it a white cap face is almost
+    // invisible against the light card background.
     readonly property var styleParams: {
         const minimal = {
             type: "minimal",
@@ -123,8 +148,8 @@ PluginComponent {
             baseColor: "#ffffff",
             secondaryColor: "#1a1a1a",
             textColor: "#1a1a1a",
-            borderColor: "#1a1a1a",
-            borderWidth: 0,
+            borderColor: "#3d3d3d",
+            borderWidth: 1,
             cornerRadius: 0.45,
             gradient: true,
             shadowOpacity: 0.25
@@ -134,8 +159,8 @@ PluginComponent {
             baseColor: "#ffffff",
             secondaryColor: "#1a1a1a",
             textColor: "#1a1a1a",
-            borderColor: "#1a1a1a",
-            borderWidth: 0,
+            borderColor: "#3d3d3d",
+            borderWidth: 1,
             cornerRadius: 0.45,
             gradient: false,
             shadowOpacity: 0
@@ -236,7 +261,15 @@ print(json.dumps(out))
 
     onSelectedDevicePathChanged: {
         inputProc.running = false;
+        // The old process will not report its releases: drop held state so a
+        // key can never stay stuck "pressed" across a device switch.
+        root.heldKeys = [];
         inputRestartTimer.restart();
+    }
+
+    onEnabledChanged: {
+        if (!root.enabled)
+            root.heldKeys = [];
     }
 
     Timer {
@@ -249,6 +282,11 @@ print(json.dumps(out))
         id: fadeTimer
         interval: root.fadeTimeout
         onTriggered: {
+            // keyviz keeps a keycap on screen as long as its key is held
+            if (root.hasHeldVisibleKey()) {
+                fadeTimer.restart();
+                return;
+            }
             root.displayText = "";
             root.textBuffer = "";
             root.historyList = [];
@@ -300,17 +338,96 @@ print(json.dumps(out))
         return combo.join(" + ");
     }
 
+    // Map a raw keycode to the exact label used in the history/combo text, so
+    // the overlay can match a held key against a rendered keycap.
+    function displayKeyLabel(keyName) {
+        if (keyName === "KEY_LEFTCTRL" || keyName === "KEY_RIGHTCTRL") return "Ctrl";
+        if (keyName === "KEY_LEFTSHIFT" || keyName === "KEY_RIGHTSHIFT") return "Shift";
+        if (keyName === "KEY_LEFTALT" || keyName === "KEY_RIGHTALT") return "Alt";
+        if (keyName === "KEY_LEFTMETA" || keyName === "KEY_RIGHTMETA") return "Super";
+        return KeyMapper.getDisplayKey(keyName);
+    }
+
+    // Track a key/button going down or up. Mirrors keyviz's pressedKeys array.
+    function setKeyHeld(label, down) {
+        const idx = root.heldKeys.indexOf(label);
+        if (down) {
+            if (idx !== -1) return;
+            const next = root.heldKeys.slice();
+            next.push(label);
+            root.heldKeys = next;
+        } else {
+            if (idx === -1) return;
+            const next = root.heldKeys.slice();
+            next.splice(idx, 1);
+            root.heldKeys = next;
+        }
+    }
+
+    // keyviz never expires a keycap while its key is still held down
+    // (tick() keeps any key that is in pressedKeys). Mirror that, but only for
+    // keys that are actually on screen — an unrelated held key must not pin the
+    // overlay open forever.
+    function hasHeldVisibleKey() {
+        if (root.heldKeys.length === 0) return false;
+        for (let i = 0; i < root.historyList.length; i++) {
+            const entry = root.historyList[i];
+            // A combo row holds several labels; a non-combo row is a single
+            // label (mouse click, or a standalone key when showNormalKeys is on).
+            // Both can be in the pressed state, so both must keep the overlay up.
+            const keys = entry.isCombo ? entry.text.split(" + ") : [entry.text];
+            for (let j = 0; j < keys.length; j++) {
+                if (root.heldKeys.indexOf(keys[j]) !== -1) return true;
+            }
+        }
+        return false;
+    }
+
+    // Hold a set of keycaps for a moment so the press animation can be seen
+    // without touching the keyboard (`dms ipc keyviz test`).
+    Timer {
+        id: previewReleaseTimer
+        interval: 420
+        onTriggered: root.heldKeys = []
+    }
+
+    function previewPress(labels) {
+        root.heldKeys = labels;
+        previewReleaseTimer.restart();
+    }
+
+    function mouseButtonLabel(data) {
+        if (data.includes("BTN_LEFT") || data.includes("(272)")) return "LMB Click";
+        if (data.includes("BTN_RIGHT") || data.includes("(273)")) return "RMB Click";
+        if (data.includes("BTN_MIDDLE") || data.includes("(274)")) return "MMB Click";
+        return "Mouse Click";
+    }
+
     function addKeystroke(text, isCombo) {
         fadeTimer.stop();
+        // keyviz counts consecutive repeats of the same key event: KeyEvent is
+        // constructed with pressedCount 1 and press() bumps it when the key is
+        // already in the last group (types/event.ts:206-213, key_event.ts:158).
+        // The daemon works with rendered combo strings, so the equivalent is
+        // "the same keystroke text again". Held modifier + repeated key is the
+        // canonical case: hold Ctrl and tap I twice -> "Ctrl + I", "Ctrl + I".
+        if (text === root.lastKeystrokeText)
+            root.repeatCount++;
+        else
+            root.repeatCount = 1;
+        root.lastKeystrokeText = text;
+
         let newList = root.historyList.slice();
         const lastItem = newList.length > 0 ? newList[newList.length - 1] : null;
         if (lastItem && !lastItem.isCombo && !isCombo) {
             // Continuing typing stream: update the entry in place so the
             // overlay animates it only when it first appears
             lastItem.text = text;
+            lastItem.count = root.repeatCount;
         } else {
             root.historyUidCounter++;
-            newList.push({ uid: root.historyUidCounter, text: text, isCombo: isCombo });
+            newList.push({ uid: root.historyUidCounter, text: text, isCombo: isCombo,
+                           count: root.repeatCount });
             while (newList.length > root.historyLimit) {
                 newList.shift();
             }
@@ -449,8 +566,10 @@ print(json.dumps(out))
                     if (keyMatch) {
                         const keyName = keyMatch[1];
                         if (data.includes("value 1")) {
+                            root.setKeyHeld(root.displayKeyLabel(keyName), true);
                             root.handleKeyPress(keyName);
                         } else if (data.includes("value 0")) {
+                            root.setKeyHeld(root.displayKeyLabel(keyName), false);
                             root.handleKeyRelease(keyName);
                         }
                     }
@@ -459,18 +578,20 @@ print(json.dumps(out))
                     if (keyMatch) {
                         const keyName = keyMatch[1];
                         if (data.includes("pressed")) {
+                            root.setKeyHeld(root.displayKeyLabel(keyName), true);
                             root.handleKeyPress(keyName);
                         } else if (data.includes("released")) {
+                            root.setKeyHeld(root.displayKeyLabel(keyName), false);
                             root.handleKeyRelease(keyName);
                         }
                     }
                 } else if (root.showMouseClicks && data.includes("POINTER_BUTTON")) {
                     if (data.includes("pressed")) {
-                        let btnName = "Mouse Click";
-                        if (data.includes("BTN_LEFT") || data.includes("(272)")) btnName = "LMB Click";
-                        else if (data.includes("BTN_RIGHT") || data.includes("(273)")) btnName = "RMB Click";
-                        else if (data.includes("BTN_MIDDLE") || data.includes("(274)")) btnName = "MMB Click";
+                        const btnName = root.mouseButtonLabel(data);
+                        root.setKeyHeld(btnName, true);
                         root.handleMouseClick(btnName);
+                    } else if (data.includes("released")) {
+                        root.setKeyHeld(root.mouseButtonLabel(data), false);
                     }
                 }
             }

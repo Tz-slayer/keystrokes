@@ -325,9 +325,9 @@ print(json.dumps(devs))
             id: customSeparatorSetting
             settingKey: "customSeparator"
             label: I18n.tr("Custom Separator")
-            description: I18n.tr("Connector character between shortcut keys (e.g. +, -, ➔)")
-            defaultValue: "+"
-            placeholder: "+"
+            description: I18n.tr("Optional character drawn between shortcut keys. keyviz has none, so this is empty by default.")
+            defaultValue: ""
+            placeholder: I18n.tr("none")
         }
     }
 
@@ -336,7 +336,7 @@ print(json.dumps(devs))
         SectionTitle {
             text: I18n.tr("Visibility Options")
             icon: "visibility"
-            showReset: showShortcutsSetting.isDirty || macSymbolsSetting.isDirty || showModifierStatusSetting.isDirty || showOnlyModifiersSetting.isDirty || ignoreFilterKeysSetting.isDirty || showNormalKeysSetting.isDirty || showMouseClicksSetting.isDirty
+            showReset: showShortcutsSetting.isDirty || macSymbolsSetting.isDirty || showModifierStatusSetting.isDirty || showOnlyModifiersSetting.isDirty || ignoreFilterKeysSetting.isDirty || showNormalKeysSetting.isDirty || showMouseClicksSetting.isDirty || showPressCountSetting.isDirty
             onResetClicked: {
                 showShortcutsSetting.resetToDefault();
                 macSymbolsSetting.resetToDefault();
@@ -345,6 +345,7 @@ print(json.dumps(devs))
                 ignoreFilterKeysSetting.resetToDefault();
                 showNormalKeysSetting.resetToDefault();
                 showMouseClicksSetting.resetToDefault();
+                showPressCountSetting.resetToDefault();
             }
         }
 
@@ -413,6 +414,16 @@ print(json.dumps(devs))
             settingKey: "showMouseClicks"
             label: I18n.tr("Show Mouse Clicks")
             defaultValue: false
+        }
+
+        Separator {}
+
+        ToggleSettingPlus {
+            id: showPressCountSetting
+            settingKey: "showPressCount"
+            label: I18n.tr("Show Press Count")
+            description: I18n.tr("Show a badge on the last keycap with the number of times it was pressed in a row")
+            defaultValue: true
         }
     }
 
