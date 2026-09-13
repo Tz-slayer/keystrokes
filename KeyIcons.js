@@ -2,6 +2,9 @@
 // (src/lib/keymaps.ts, linux platform) and (src/components/ui/icons.tsx).
 // Lucide icons pinned to v0.562.0 (keyviz's lucide-react version):
 // viewBox 0 0 24 24, stroke 2, round caps/joins, no fill.
+//
+// Icon path data below is taken verbatim from lucide-static@0.562.0.
+// Lucide is ISC licensed -- see the License section of README.md.
 const ICONS = {
     "arrow-big-up": ["M9 13a1 1 0 0 0-1-1H5.061a1 1 0 0 1-.75-1.811l6.836-6.835a1.207 1.207 0 0 1 1.707 0l6.835 6.835a1 1 0 0 1-.75 1.811H16a1 1 0 0 0-1 1v6a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"],
     "arrow-big-up-dash": ["M9 13a1 1 0 0 0-1-1H5.061a1 1 0 0 1-.75-1.811l6.836-6.835a1.207 1.207 0 0 1 1.707 0l6.835 6.835a1 1 0 0 1-.75 1.811H16a1 1 0 0 0-1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z", "M9 20h6"],
@@ -20,6 +23,7 @@ const ICONS = {
     "grid-2x2": ["M12 3v18", "M3 12h18", "M5.0,3.0h14.0a2.0,2.0 0 0 1 2.0,2.0v14.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-14.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
     "image": ["m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", "M7.0 9.0a2.0 2.0 0 1 0 4.0 0a2.0 2.0 0 1 0 -4.0 0", "M5.0,3.0h14.0a2.0,2.0 0 0 1 2.0,2.0v14.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-14.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
     "lock": ["M7 11V7a5 5 0 0 1 10 0v4", "M5.0,11.0h14.0a2.0,2.0 0 0 1 2.0,2.0v7.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-7.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
+    "moon": ["M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"],
     "mouse": ["M12 6v4", "M12.0,2.0h0.0a7.0,7.0 0 0 1 7.0,7.0v6.0a7.0,7.0 0 0 1 -7.0,7.0h-0.0a7.0,7.0 0 0 1 -7.0,-7.0v-6.0a7.0,7.0 0 0 1 7.0,-7.0Z"],
     "mouse-left-click": ["M5 11L5 15C5 18.866 8.13401 22 12 22C15.866 22 19 18.866 19 15V9C19 5.13401 15.866 2 12 2C10.9264 2 9.90926 2.24169 9 2.67363", "M12 6V10", "M3 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"],
     "mouse-middle-click": ["M19 9C19 5.13401 15.866 2 12 2C8.13401 2 5 5.13401 5 9V15C5 18.866 8.13401 22 12 22C15.866 22 19 18.866 19 15V9Z", "M10 8a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"],
@@ -31,9 +35,14 @@ const ICONS = {
     "move-up-left": ["M5 11V5H11", "M5 5L19 19"],
     "option": ["M3 3h6l6 18h6", "M14 3h7"],
     "pause": ["M15.0,3.0h3.0a1.0,1.0 0 0 1 1.0,1.0v16.0a1.0,1.0 0 0 1 -1.0,1.0h-3.0a1.0,1.0 0 0 1 -1.0,-1.0v-16.0a1.0,1.0 0 0 1 1.0,-1.0Z", "M6.0,3.0h3.0a1.0,1.0 0 0 1 1.0,1.0v16.0a1.0,1.0 0 0 1 -1.0,1.0h-3.0a1.0,1.0 0 0 1 -1.0,-1.0v-16.0a1.0,1.0 0 0 1 1.0,-1.0Z"],
+    "play": ["M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"],
     "return": ["M11 6H15.5C17.9853 6 20 8.01472 20 10.5C20 12.9853 17.9853 15 15.5 15H4", "M6.99998 12C6.99998 12 4.00001 14.2095 4 15C3.99999 15.7906 7 18 7 18"],
+    "skip-back": ["M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z", "M3 20V4"],
+    "skip-forward": ["M21 4v16", "M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"],
     "space": ["M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1"],
     "sparkle": ["M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"],
+    "sun": ["M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41", "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41"],
+    "volume-1": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z", "M16 9a5 5 0 0 1 0 6"],
     "volume-2": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z", "M16 9a5 5 0 0 1 0 6", "M19.364 18.364a9 9 0 0 0 0-12.728"],
     "volume-x": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"],
 };
@@ -64,12 +73,38 @@ const DISPLAY = {
     "RMB Click": { label: "right click", shortLabel: "right", icon: "mouse-right-click", category: "mouse" },
     "Shift": { label: "shift", shortLabel: "shift", glyph: "⇧", icon: "arrow-big-up", category: "modifier" },
     "Space": { label: "space", glyph: "⎵", icon: "space" },
-    "Super": { label: "Meta", shortLabel: "meta", glyph: "✦", icon: "sparkle", category: "modifier" },
+    // Deliberate deviation from keyviz's linux branch: keyviz uses Sparkle (✦)
+    // here and only switches to the Command (⌘) icon on macOS
+    // (keymaps.ts:463-480, `switchPlatform`). Requested: show ⌘ on Linux too.
+    // `glyph` is unused by the overlay, kept only for parity with keymaps.ts.
+    "Super": { label: "Meta", shortLabel: "meta", glyph: "⌘", icon: "command", category: "modifier" },
     "Tab": { label: "tab", glyph: "⇆", icon: "arrow-left-right", category: "special" },
     "[": { label: "[", category: "punctuation" },
     "\\": { label: "\\", category: "punctuation" },
     "]": { label: "]", category: "punctuation" },
     "`": { label: "`", category: "punctuation" },
+    // ───────────── Media keys ─────────────
+    // Linux reports these as bare KEY_* names and keyMapper.js has no entry for
+    // them, so the daemon passes e.g. "BRIGHTNESSDOWN" through verbatim. A bare
+    // 13-character name used to stretch the keycap; give them short labels and
+    // icons the way keyviz treats VolumeUp/VolumeDown/Mute instead.
+    // (keyviz itself cannot show brightness keys at all -- rdev has no such
+    // variant -- so it just drops them.)
+    //
+    // keyviz's rule for directional keys is that the *shortLabel* carries the
+    // direction and both directions share one icon: keymaps.ts gives VolumeUp and
+    // VolumeDown the same Volume2Icon ("vol +" / "vol -"). Follow it, rather than
+    // inventing a sun/moon pair -- at the small icon size the sun's eight thin
+    // rays all but vanish, so a pair reads worse than a shared glyph.
+    "BRIGHTNESSUP": { label: "brightness up", shortLabel: "bright+", icon: "moon", category: "special" },
+    "BRIGHTNESSDOWN": { label: "brightness down", shortLabel: "bright-", icon: "moon", category: "special" },
+    "VOLUMEUP": { label: "volume up", shortLabel: "vol +", icon: "volume-2", category: "special" },
+    "VOLUMEDOWN": { label: "volume down", shortLabel: "vol -", icon: "volume-2", category: "special" },
+    "VOLUMEMUTE": { label: "mute", shortLabel: "mute", icon: "volume-x", category: "special" },
+    "MUTE": { label: "mute", shortLabel: "mute", icon: "volume-x", category: "special" },
+    "PLAYPAUSE": { label: "play / pause", shortLabel: "play", icon: "play", category: "special" },
+    "NEXTSONG": { label: "next track", shortLabel: "next", icon: "skip-forward", category: "special" },
+    "PREVIOUSSONG": { label: "previous track", shortLabel: "prev", icon: "skip-back", category: "special" },
     "←": { label: "left", glyph: "←", icon: "arrow-left", category: "arrow" },
     "↑": { label: "up", glyph: "↑", icon: "arrow-up", category: "arrow" },
     "→": { label: "right", glyph: "→", icon: "arrow-right", category: "arrow" },
