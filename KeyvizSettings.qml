@@ -6,6 +6,7 @@ import qs.Modules.Plugins
 import qs.Services
 import qs.Widgets
 import "./dms-common"
+import "keyvizStyle.js" as KeyvizStyle
 
     PluginSettings {
         id: root
@@ -18,8 +19,9 @@ import "./dms-common"
         readonly property var styleOptions: {
             var opts = [
                 { label: I18n.tr("Minimal"), value: "minimal" },
-                { label: I18n.tr("Elevated"), value: "elevated" },
-                { label: I18n.tr("Mechanical"), value: "mechanical" }
+                { label: I18n.tr("Laptop"), value: "laptop" },
+                { label: I18n.tr("Low Profile"), value: "lowprofile" },
+                { label: I18n.tr("PBT"), value: "pbt" }
             ];
             const cs = daemon ? daemon.customStyles : {};
             for (const id in cs)
@@ -93,17 +95,48 @@ print(json.dumps(devs))
         });
     }
 
+    property bool refreshingControls: false
+
+    function refreshControls(item) {
+        const outer = !root.refreshingControls;
+        root.refreshingControls = true;
+        if (item.settingKey !== undefined && item.value !== undefined) {
+            item.value = root.loadValue(item.settingKey, item.defaultValue);
+            if (typeof item.load === "function") item.load();
+        }
+        if (item.children) for (let i = 0; i < item.children.length; i++) refreshControls(item.children[i]);
+        if (outer) root.refreshingControls = false;
+    }
+
+    function currentStyle() {
+        const data = {};
+        Object.keys(KeyvizStyle.DEFAULTS).forEach(key => { data[key] = root.loadValue(key, KeyvizStyle.DEFAULTS[key]); });
+        data.keyvizMouseStyle = root.loadValue("keyvizMouseStyle", null);
+        return KeyvizStyle.exportStyle(data);
+    }
+
+    function applyValues(values) {
+        Object.keys(values).forEach(key => root.saveValue(key, values[key]));
+        root.refreshControls(root);
+    }
+
+    SettingsCard {
+        SectionTitle { text: I18n.tr("Keyviz Color Presets"); icon: "palette" }
+        ComboBox { id: paletteChoice; width: parent.width; model: KeyvizStyle.COLOR_SCHEMES.map(scheme => scheme.name) }
+        Row {
+            spacing: Theme.spacingS
+            DankButton { text: I18n.tr("Apply Palette"); onClicked: root.applyValues(KeyvizStyle.palette(paletteChoice.currentIndex)) }
+            DankButton { text: I18n.tr("Randomize Style"); onClicked: root.applyValues(KeyvizStyle.randomStyle(root.daemon ? root.daemon.pluginData : {})) }
+        }
+    }
+
+    KeyvizParitySettings {}
+
     SettingsCard {
         id: generalSection
         SectionTitle {
             text: I18n.tr("General Settings")
             icon: "tune"
-            showReset: enabledSetting.isDirty || fadeTimeoutSetting.isDirty || fontSizeSetting.isDirty
-            onResetClicked: {
-                enabledSetting.resetToDefault();
-                fadeTimeoutSetting.resetToDefault();
-                fontSizeSetting.resetToDefault();
-            }
         }
 
         ToggleSettingPlus {
@@ -115,31 +148,25 @@ print(json.dumps(devs))
 
         Separator {}
 
-        SliderSettingPlus {
+        KeyvizValueSetting {
             id: fadeTimeoutSetting
             settingKey: "fadeTimeout"
             label: I18n.tr("Fade Timeout")
-            description: I18n.tr("Inactivity duration before overlay disappears")
-            minimum: 500
-            maximum: 5000
-            defaultValue: 1500
-            unit: "ms"
-            leftLabel: "500ms"
-            rightLabel: "5000ms"
+            description: I18n.tr("How long released keycaps remain visible (milliseconds)")
+            minimum: 0
+            maximum: 60000
+            defaultValue: 5000
         }
 
         Separator {}
 
-        SliderSettingPlus {
+        KeyvizValueSetting {
             id: fontSizeSetting
             settingKey: "fontSize"
             label: I18n.tr("Font Size")
-            minimum: 16
-            maximum: 64
-            defaultValue: 24
-            unit: "px"
-            leftLabel: "16px"
-            rightLabel: "64px"
+            minimum: 8
+            maximum: 200
+            defaultValue: 32
         }
     }
 
@@ -148,22 +175,6 @@ print(json.dumps(devs))
         SectionTitle {
             text: I18n.tr("Layout & Animations")
             icon: "display_settings"
-            showReset: positionSetting.isDirty || animationTypeSetting.isDirty || animationDurationSetting.isDirty || keycapStyleSetting.isDirty || roundedKeycapsSetting.isDirty || overlayOpacitySetting.isDirty || marginSizeSetting.isDirty || charLimitSetting.isDirty || textColorSetting.isDirty || keycapTextColorSetting.isDirty || historyLimitSetting.isDirty || bgColorSetting.isDirty || customSeparatorSetting.isDirty
-            onResetClicked: {
-                positionSetting.resetToDefault();
-                animationTypeSetting.resetToDefault();
-                animationDurationSetting.resetToDefault();
-                keycapStyleSetting.resetToDefault();
-                roundedKeycapsSetting.resetToDefault();
-                overlayOpacitySetting.resetToDefault();
-                marginSizeSetting.resetToDefault();
-                charLimitSetting.resetToDefault();
-                textColorSetting.resetToDefault();
-                keycapTextColorSetting.resetToDefault();
-                historyLimitSetting.resetToDefault();
-                bgColorSetting.resetToDefault();
-                customSeparatorSetting.resetToDefault();
-            }
         }
 
         SelectionSettingPlus {
@@ -174,6 +185,9 @@ print(json.dumps(devs))
                 { label: I18n.tr("Top Left"), value: "top_left" },
                 { label: I18n.tr("Top Center"), value: "top_center" },
                 { label: I18n.tr("Top Right"), value: "top_right" },
+                { label: I18n.tr("Center Left"), value: "center_left" },
+                { label: I18n.tr("Center"), value: "center" },
+                { label: I18n.tr("Center Right"), value: "center_right" },
                 { label: I18n.tr("Bottom Left"), value: "bottom_left" },
                 { label: I18n.tr("Bottom Center"), value: "bottom_center" },
                 { label: I18n.tr("Bottom Right"), value: "bottom_right" }
@@ -187,9 +201,17 @@ print(json.dumps(devs))
             id: keycapStyleSetting
             settingKey: "keycapStyle"
             label: I18n.tr("Keycap Style")
-            description: I18n.tr("Keycap skin (keyviz Minimal / Elevated / Mechanical). Add custom styles: drop a JSON file into ~/.config/DankMaterialShell/keyviz_styles/ and reopen this page")
+            description: I18n.tr("Keycap skin, ported 1:1 from keyviz (Minimal / Laptop / Low Profile / PBT). Add custom styles: drop a JSON file into ~/.config/DankMaterialShell/keyviz_styles/ and reopen this page")
             options: root.styleOptions
-            defaultValue: "mechanical"
+            defaultValue: "lowprofile"
+            onValueChanged: {
+                if (isInitialized && !root.refreshingControls && value === "minimal") {
+                    root.saveValue("textVariant", "icon");
+                    root.saveValue("modifierHighlight", false);
+                    root.saveValue("showIcon", true);
+                    Qt.callLater(() => root.refreshControls(root));
+                }
+            }
         }
 
         Separator {}
@@ -216,118 +238,133 @@ print(json.dumps(devs))
             settingKey: "animationDuration"
             label: I18n.tr("Animation Duration")
             description: I18n.tr("Duration of the keycap enter/exit animations")
-            minimum: 100
+            minimum: 50
             maximum: 1000
             defaultValue: 250
             unit: "ms"
-            leftLabel: "100ms"
+            leftLabel: "50ms"
             rightLabel: "1000ms"
+        }
+        Separator {}
+
+    }
+
+    SettingsCard {
+        id: contentSection
+        SectionTitle {
+            text: I18n.tr("Keycap Content")
+            icon: "text_fields"
+        }
+
+        SelectionSettingPlus {
+            id: textVariantSetting
+            settingKey: "textVariant"
+            label: I18n.tr("Label Style")
+            description: I18n.tr("Icon only, the full key name, or keyviz's short label (key_style.ts text.variant)")
+            options: [
+                { label: I18n.tr("Icon"), value: "icon" },
+                { label: I18n.tr("Full Text"), value: "text" },
+                { label: I18n.tr("Short Text"), value: "text-short" }
+            ]
+            defaultValue: "text-short"
+            onValueChanged: if (isInitialized && !root.refreshingControls && value === "icon") { root.saveValue("showIcon", true); Qt.callLater(() => root.refreshControls(root)); }
+        }
+
+        Separator {}
+
+        SelectionSettingPlus {
+            id: textCapsSetting
+            settingKey: "textCaps"
+            label: I18n.tr("Text Case")
+            options: [
+                { label: I18n.tr("Capitalize"), value: "capitalize" },
+                { label: I18n.tr("Uppercase"), value: "uppercase" },
+                { label: I18n.tr("Lowercase"), value: "lowercase" }
+            ]
+            defaultValue: "capitalize"
+        }
+
+        Separator {}
+
+        SelectionSettingPlus {
+            id: textAlignmentSetting
+            settingKey: "textAlignment"
+            label: I18n.tr("Label Alignment")
+            description: I18n.tr("Where the label sits inside the keycap (key_style.ts text.alignment)")
+            options: [
+                { label: I18n.tr("Top Left"), value: "top-left" },
+                { label: I18n.tr("Top Center"), value: "top-center" },
+                { label: I18n.tr("Top Right"), value: "top-right" },
+                { label: I18n.tr("Center Left"), value: "center-left" },
+                { label: I18n.tr("Center"), value: "center" },
+                { label: I18n.tr("Center Right"), value: "center-right" },
+                { label: I18n.tr("Bottom Left"), value: "bottom-left" },
+                { label: I18n.tr("Bottom Center"), value: "bottom-center" },
+                { label: I18n.tr("Bottom Right"), value: "bottom-right" }
+            ]
+            defaultValue: "center"
         }
 
         Separator {}
 
         ToggleSettingPlus {
-            id: roundedKeycapsSetting
-            settingKey: "roundedKeycaps"
-            label: I18n.tr("Rounded Keycap Corners")
+            id: showIconSetting
+            settingKey: "showIcon"
+            label: I18n.tr("Show Icons")
+            description: I18n.tr("Draw keyviz's vector icons on the keys that have one")
             defaultValue: true
         }
 
         Separator {}
 
-        SliderSettingPlus {
-            id: overlayOpacitySetting
-            settingKey: "overlayOpacity"
-            label: I18n.tr("Overlay Opacity")
-            minimum: 10
-            maximum: 100
-            defaultValue: 90
-            unit: "%"
-            leftLabel: "10%"
-            rightLabel: "100%"
+        ToggleSettingPlus {
+            id: showSymbolSetting
+            settingKey: "showSymbol"
+            label: I18n.tr("Show Symbols")
+            description: I18n.tr("Draw the secondary symbol (e.g. the shifted character) when a key has one")
+            defaultValue: true
         }
 
         Separator {}
 
-        SliderSettingPlus {
-            id: marginSizeSetting
-            settingKey: "marginSize"
-            label: I18n.tr("Screen Margin")
-            description: I18n.tr("Adjust the distance of the overlay from screen edges")
-            minimum: 0
-            maximum: 100
-            defaultValue: 24
-            unit: "px"
-            leftLabel: "0px"
-            rightLabel: "100px"
+        SelectionSettingPlus {
+            id: iconAlignmentSetting
+            settingKey: "iconAlignment"
+            label: I18n.tr("Modifier Icon Alignment")
+            description: I18n.tr("Horizontal edge used by modifier icons and labels (key_style.ts layout.iconAlignment)")
+            options: [
+                { label: I18n.tr("Left"), value: "flex-start" },
+                { label: I18n.tr("Center"), value: "center" },
+                { label: I18n.tr("Right"), value: "flex-end" }
+            ]
+            defaultValue: "flex-end"
+        }
+    }
+
+    SettingsCard {
+        id: groupBackgroundSection
+        SectionTitle {
+            text: I18n.tr("Group Background")
+            icon: "layers"
+        }
+
+        ToggleSettingPlus {
+            id: groupBackgroundSetting
+            settingKey: "groupBackground"
+            label: I18n.tr("Show Group Panel")
+            description: I18n.tr("keyviz draws a rounded panel behind every group and keeps the overlay window itself transparent")
+            defaultValue: true
         }
 
         Separator {}
 
-        SliderSettingPlus {
-            id: charLimitSetting
-            settingKey: "charLimit"
-            label: I18n.tr("Normal Typing Limit")
-            description: I18n.tr("Maximum characters buffer shown for normal text")
-            minimum: 5
-            maximum: 50
-            defaultValue: 20
-            unit: "chars"
-            leftLabel: "5"
-            rightLabel: "50"
-        }
-
-        Separator {}
-
-        SliderSettingPlus {
-            id: historyLimitSetting
-            settingKey: "historyLimit"
-            label: I18n.tr("Keystroke History Limit")
-            description: I18n.tr("Number of lines to display for keystroke history")
-            minimum: 1
-            maximum: 5
-            defaultValue: 1
-            unit: "lines"
-            leftLabel: "1"
-            rightLabel: "5"
-        }
-
-        Separator {}
-
-        ColorDropdownSettingPlus {
-            id: textColorSetting
-            settingKey: "textColor"
-            label: I18n.tr("Normal Text Color")
-            defaultValueMode: "default"
-        }
-
-        Separator {}
-
-        ColorDropdownSettingPlus {
-            id: keycapTextColorSetting
-            settingKey: "keycapTextColor"
-            label: I18n.tr("Keycap & Mouse Color")
-            defaultValueMode: "default"
-        }
-
-        Separator {}
-
-        ColorDropdownSettingPlus {
-            id: bgColorSetting
-            settingKey: "bgColor"
-            label: I18n.tr("Overlay Background Color")
-            defaultValueMode: "default"
-        }
-
-        Separator {}
-
-        StringSettingPlus {
-            id: customSeparatorSetting
-            settingKey: "customSeparator"
-            label: I18n.tr("Custom Separator")
-            description: I18n.tr("Optional character drawn between shortcut keys. keyviz has none, so this is empty by default.")
-            defaultValue: ""
-            placeholder: I18n.tr("none")
+        KeyvizValueSetting {
+            id: groupBackgroundColorSetting
+            kind: "color"
+            settingKey: "groupBackgroundCustom"
+            label: I18n.tr("Group Panel Color")
+            description: I18n.tr("CSS color: #RRGGBB or #RRGGBBAA; alpha is the final pair.")
+            defaultValue: "#ffffff99"
         }
     }
 
@@ -336,84 +373,30 @@ print(json.dumps(devs))
         SectionTitle {
             text: I18n.tr("Visibility Options")
             icon: "visibility"
-            showReset: showShortcutsSetting.isDirty || macSymbolsSetting.isDirty || showModifierStatusSetting.isDirty || showOnlyModifiersSetting.isDirty || ignoreFilterKeysSetting.isDirty || showNormalKeysSetting.isDirty || showMouseClicksSetting.isDirty || showPressCountSetting.isDirty
-            onResetClicked: {
-                showShortcutsSetting.resetToDefault();
-                macSymbolsSetting.resetToDefault();
-                showModifierStatusSetting.resetToDefault();
-                showOnlyModifiersSetting.resetToDefault();
-                ignoreFilterKeysSetting.resetToDefault();
-                showNormalKeysSetting.resetToDefault();
-                showMouseClicksSetting.resetToDefault();
-                showPressCountSetting.resetToDefault();
-            }
         }
-
-        ToggleSettingPlus {
-            id: showShortcutsSetting
-            settingKey: "showShortcuts"
-            label: I18n.tr("Show Key Combinations")
-            description: I18n.tr("Toggle to display modifier shortcuts (e.g., Ctrl + Alt + T)")
-            defaultValue: true
-        }
-
         Separator {}
 
         ToggleSettingPlus {
-            id: macSymbolsSetting
-            settingKey: "macSymbols"
-            label: I18n.tr("Use macOS Symbols")
-            description: I18n.tr("Toggle to display modifiers and control keys as macOS symbols (e.g. ⌘, ⌥, ⇧, ⌃, ⏎)")
+            id: showMouseEventsSetting
+            settingKey: "showMouseEvents"
+            label: I18n.tr("Show Mouse Events")
+            description: I18n.tr("Show mouse clicks, drags and wheel scrolling as keycaps")
             defaultValue: false
         }
 
         Separator {}
 
-        ToggleSettingPlus {
-            id: showModifierStatusSetting
-            settingKey: "showModifierStatus"
-            label: I18n.tr("Show Held Modifiers")
-            description: I18n.tr("Show a real-time status bar of active modifier keys currently being held down")
-            defaultValue: false
-        }
-
-        Separator {}
-
-        ToggleSettingPlus {
-            id: showOnlyModifiersSetting
-            settingKey: "showOnlyModifiers"
-            label: I18n.tr("Show Standalone Modifiers")
-            description: I18n.tr("Toggle to display modifiers like Ctrl or Shift when pressed alone")
-            defaultValue: false
-        }
-
-        Separator {}
-
-        ToggleSettingPlus {
-            id: ignoreFilterKeysSetting
-            settingKey: "ignoreFilterKeys"
-            label: I18n.tr("Ignore Lock Keys")
-            description: I18n.tr("Ignore system lock keys (CapsLock, NumLock, ScrollLock) to avoid noise")
-            defaultValue: true
-        }
-
-        Separator {}
-
-        ToggleSettingPlus {
-            id: showNormalKeysSetting
-            settingKey: "showNormalKeys"
-            label: I18n.tr("Show Normal Keystrokes")
-            description: I18n.tr("Toggle to display normal letters instead of just modifier shortcuts")
-            defaultValue: false
-        }
-
-        Separator {}
-
-        ToggleSettingPlus {
-            id: showMouseClicksSetting
-            settingKey: "showMouseClicks"
-            label: I18n.tr("Show Mouse Clicks")
-            defaultValue: false
+        SliderSettingPlus {
+            id: dragThresholdSetting
+            settingKey: "dragThreshold"
+            label: I18n.tr("Drag Threshold")
+            description: I18n.tr("Distance the pointer travels while a button is held before it becomes a drag")
+            minimum: 10
+            maximum: 200
+            defaultValue: 50
+            unit: "px"
+            leftLabel: "10"
+            rightLabel: "200"
         }
 
         Separator {}
@@ -432,10 +415,6 @@ print(json.dumps(devs))
         SectionTitle {
             text: I18n.tr("Input Device")
             icon: "keyboard"
-            showReset: selectedDevicePathSetting.isDirty
-            onResetClicked: {
-                selectedDevicePathSetting.resetToDefault();
-            }
         }
 
         SelectionSettingPlus {
@@ -493,10 +472,42 @@ print(json.dumps(devs))
             expanded: usageTitle.isExpanded
             items: [
                 I18n.tr("Displays keystrokes on an always-on-top floating screen overlay."),
-                I18n.tr("Key combinations are rendered as visual keycaps, and standard typing as stream text."),
+                I18n.tr("Key combinations are rendered as visual keycaps, and standard typing as individual keycaps."),
                 I18n.tr("Ensure your user belongs to the <b>input</b> group to read keyboard events without root.")
             ]
         }
+    }
+
+    SettingsCard {
+        SectionTitle { text: I18n.tr("Keyviz Style Import / Export"); icon: "import_export" }
+        StyledText {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: I18n.tr("Paste Keyviz style JSON and apply it, or export the current style below. Mouse settings are not applied.")
+        }
+        ScrollView {
+            width: parent.width; height: 200
+            TextArea { id: styleJson; wrapMode: TextEdit.Wrap; selectByMouse: true; placeholderText: "{ ... }" }
+        }
+        Row {
+            spacing: Theme.spacingS
+            DankButton {
+                text: I18n.tr("Export JSON")
+                onClicked: { styleJson.text = JSON.stringify(root.currentStyle(), null, 2); styleStatus.text = I18n.tr("Select and copy the JSON above."); }
+            }
+            DankButton {
+                text: I18n.tr("Apply JSON")
+                onClicked: {
+                    try {
+                        const values = KeyvizStyle.importStyle(JSON.parse(styleJson.text));
+                        Object.keys(values).forEach(key => root.saveValue(key, values[key]));
+                        root.refreshControls(root);
+                        styleStatus.text = I18n.tr("Style applied.");
+                    } catch (error) { styleStatus.text = error.message; }
+                }
+            }
+        }
+        StyledText { id: styleStatus; width: parent.width; wrapMode: Text.WordWrap }
     }
 
     PluginAbout {
