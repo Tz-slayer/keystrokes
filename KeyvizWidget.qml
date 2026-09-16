@@ -217,13 +217,13 @@ print(json.dumps(devs))
                     }
 
                     DankToggle {
-                        text: I18n.tr("Mouse Clicks")
+                        text: I18n.tr("Mouse Events")
                         onToggled: {
                             if (root.daemon)
-                                root.daemon.saveSetting("showMouseClicks", checked);
+                                root.daemon.saveSetting("showMouseEvents", checked);
                         }
                         Binding on checked {
-                            value: root.daemon ? root.daemon.showMouseClicks : false
+                            value: root.daemon ? root.daemon.showMouseEvents : false
                         }
                     }
 
