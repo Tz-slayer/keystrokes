@@ -1,12 +1,11 @@
 {
     "name": "Nord Mechanical",
-    "type": "mechanical",
+    "type": "pbt",
     "baseColor": "#3b4252",
     "secondaryColor": "#2e3440",
     "textColor": "#eceff4",
     "borderColor": "#4c566a",
     "borderWidth": 1,
     "cornerRadius": 0.3,
-    "gradient": true,
-    "shadowOpacity": 0
+    "gradient": true
 }

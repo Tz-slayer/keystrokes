@@ -41,25 +41,63 @@ const ICONS = {
     "skip-forward": ["M21 4v16", "M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"],
     "space": ["M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1"],
     "sparkle": ["M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"],
-    "sun": ["M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41", "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41"],
+    "sun": ["M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0", "M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41", "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41"],
     "volume-1": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z", "M16 9a5 5 0 0 1 0 6"],
     "volume-2": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z", "M16 9a5 5 0 0 1 0 6", "M19.364 18.364a9 9 0 0 0 0-12.728"],
-    "volume-x": ["M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"],
+    "volume-x": ["m22 9-6 6", "m16 9 6 6", "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"],
 };
 
 const DISPLAY = {
-    "'": { label: "'", category: "punctuation" },
-    ",": { label: ",", category: "punctuation" },
-    "-": { label: "-", category: "punctuation" },
-    ".": { label: ".", category: "punctuation" },
-    "/": { label: "?", category: "punctuation" },
-    ";": { label: ";", category: "punctuation" },
-    "=": { label: "=", category: "punctuation" },
+    "Fn": { label: "fn", category: "modifier" },
+    "PrintScreen": {"label": "print screen", "shortLabel": "prt scrn", "icon": "image"},
+    "Pause": {"label": "pause break", "shortLabel": "pause", "icon": "pause"},
+    "Apps": {"label": "menu", "glyph": "☰"},
+    "ScrollLock": {"label": "scroll lock", "glyph": "🖱", "icon": "mouse"},
+    "NumLock": {"label": "num lock", "icon": "lock"},
+    "KpReturn": {"label": "Enter", "glyph": "↩", "category": "numpad"},
+    "KpDecimal": {"label": ".", "symbol": "del", "category": "numpad"},
+    "Kp0": {"label": "0", "symbol": "ins", "category": "numpad"},
+    "Kp1": {"label": "1", "symbol": "end", "category": "numpad"},
+    "Kp2": {"label": "2", "symbol": "▼", "category": "numpad"},
+    "Kp3": {"label": "3", "symbol": "pg dn", "category": "numpad"},
+    "Kp4": {"label": "4", "symbol": "◀", "category": "numpad"},
+    "Kp5": {"label": "5", "symbol": " ", "category": "numpad"},
+    "Kp6": {"label": "6", "symbol": "▶", "category": "numpad"},
+    "Kp7": {"label": "7", "symbol": "home", "category": "numpad"},
+    "Kp8": {"label": "8", "symbol": "▲", "category": "numpad"},
+    "Kp9": {"label": "9", "symbol": "pg up", "category": "numpad"},
+    "0": {"label": "0", "symbol": ")", "category": "digit"},
+    "1": {"label": "1", "symbol": "!", "category": "digit"},
+    "2": {"label": "2", "symbol": "@", "category": "digit"},
+    "3": {"label": "3", "symbol": "#", "category": "digit"},
+    "4": {"label": "4", "symbol": "$", "category": "digit"},
+    "5": {"label": "5", "symbol": "%", "category": "digit"},
+    "6": {"label": "6", "symbol": "^", "category": "digit"},
+    "7": {"label": "7", "symbol": "&", "category": "digit"},
+    "8": {"label": "8", "symbol": "*", "category": "digit"},
+    "9": {"label": "9", "symbol": "(", "category": "digit"},
+    "KpDivide": {"label": "/", "category": "punctuation"},
+    "KpMultiply": {"label": "*", "category": "punctuation"},
+    "KpMinus": {"label": "-", "category": "punctuation"},
+    "KpPlus": {"label": "+", "category": "punctuation"},
+    "KpEqual": {"label": "=", "category": "punctuation"},
+    "KpComma": {"label": ",", "category": "punctuation"},
+
+    "'": { symbol: "\"", label: "'", category: "punctuation" },
+    ",": { symbol: "<", label: ",", category: "punctuation" },
+    "-": { symbol: "_", label: "-", category: "punctuation" },
+    ".": { symbol: ">", label: ".", category: "punctuation" },
+    "/": { symbol: "/", label: "?", category: "punctuation" },
+    ";": { symbol: ":", label: ";", category: "punctuation" },
+    "=": { symbol: "+", label: "=", category: "punctuation" },
     "Alt": { label: "alt", shortLabel: "alt", glyph: "⌥", icon: "option", category: "modifier" },
     "Backspace": { label: "backspace", shortLabel: "back", glyph: "⌫", icon: "delete", category: "special" },
     "Caps Lock": { label: "caps lock", glyph: "⇪", icon: "arrow-big-up-dash" },
     "Ctrl": { label: "control", shortLabel: "ctrl", glyph: "⌃", icon: "chevron-up", category: "modifier" },
     "Del": { label: "delete", shortLabel: "del", glyph: "⌦", icon: "delete", category: "special" },
+    // keyviz: keymaps.ts Drag -- no shortLabel, so the icon variant shows the
+    // bare icon and the label "drag" is centred below it.
+    "Drag": { label: "drag", icon: "mouse-right-drag", category: "mouse" },
     "End": { label: "end", glyph: "⇲", icon: "move-down-right", category: "navigation" },
     "Enter": { label: "enter", glyph: "↩", icon: "return", category: "special" },
     "Esc": { label: "escape", shortLabel: "esc", glyph: "⎋", icon: "circle-arrow-out-up-left", category: "special" },
@@ -71,18 +109,16 @@ const DISPLAY = {
     "PgDown": { label: "page down", shortLabel: "pg dn", glyph: "⤓", icon: "arrow-down-to-line", category: "navigation" },
     "PgUp": { label: "page up", shortLabel: "pg up", glyph: "⤒", icon: "arrow-up-to-line", category: "navigation" },
     "RMB Click": { label: "right click", shortLabel: "right", icon: "mouse-right-click", category: "mouse" },
-    "Shift": { label: "shift", shortLabel: "shift", glyph: "⇧", icon: "arrow-big-up", category: "modifier" },
+    "ScrollDown": { label: "scroll down", shortLabel: "scroll", icon: "mouse-scroll-down", category: "mouse" },
+    "ScrollUp": { label: "scroll up", shortLabel: "scroll", icon: "mouse-scroll-up", category: "mouse" },
+    "Shift": { label: "shift", glyph: "⇧", icon: "arrow-big-up", category: "modifier" },
     "Space": { label: "space", glyph: "⎵", icon: "space" },
-    // Deliberate deviation from keyviz's linux branch: keyviz uses Sparkle (✦)
-    // here and only switches to the Command (⌘) icon on macOS
-    // (keymaps.ts:463-480, `switchPlatform`). Requested: show ⌘ on Linux too.
-    // `glyph` is unused by the overlay, kept only for parity with keymaps.ts.
-    "Super": { label: "Meta", shortLabel: "meta", glyph: "⌘", icon: "command", category: "modifier" },
+    "Super": { label: "Meta", glyph: "✦", icon: "sparkle", category: "modifier" },
     "Tab": { label: "tab", glyph: "⇆", icon: "arrow-left-right", category: "special" },
-    "[": { label: "[", category: "punctuation" },
-    "\\": { label: "\\", category: "punctuation" },
-    "]": { label: "]", category: "punctuation" },
-    "`": { label: "`", category: "punctuation" },
+    "[": { symbol: "{", label: "[", category: "punctuation" },
+    "\\": { symbol: "|", label: "\\", category: "punctuation" },
+    "]": { symbol: "}", label: "]", category: "punctuation" },
+    "`": { symbol: "~", label: "`", category: "punctuation" },
     // ───────────── Media keys ─────────────
     // Linux reports these as bare KEY_* names and keyMapper.js has no entry for
     // them, so the daemon passes e.g. "BRIGHTNESSDOWN" through verbatim. A bare
@@ -100,8 +136,8 @@ const DISPLAY = {
     "BRIGHTNESSDOWN": { label: "brightness down", shortLabel: "bright-", icon: "moon", category: "special" },
     "VOLUMEUP": { label: "volume up", shortLabel: "vol +", icon: "volume-2", category: "special" },
     "VOLUMEDOWN": { label: "volume down", shortLabel: "vol -", icon: "volume-2", category: "special" },
-    "VOLUMEMUTE": { label: "mute", shortLabel: "mute", icon: "volume-x", category: "special" },
-    "MUTE": { label: "mute", shortLabel: "mute", icon: "volume-x", category: "special" },
+    "VOLUMEMUTE": { label: "mute", icon: "volume-x", category: "special" },
+    "MUTE": { label: "mute", icon: "volume-x", category: "special" },
     "PLAYPAUSE": { label: "play / pause", shortLabel: "play", icon: "play", category: "special" },
     "NEXTSONG": { label: "next track", shortLabel: "next", icon: "skip-forward", category: "special" },
     "PREVIOUSSONG": { label: "previous track", shortLabel: "prev", icon: "skip-back", category: "special" },
@@ -114,9 +150,24 @@ const DISPLAY = {
 // Display data for a key label produced by the daemon.
 // Single characters (letters/digits) fall back to a plain entry, like
 // keyviz letter/digit categories.
+// Keycaps synthesised from mouse input instead of a real key. The overlay uses
+// this to pick the Keycap renderer over the plain-text renderer
+// (KeyvizOverlay.qml); keeping the list here means a new mouse keycap only has
+// to be added in one place.
+const MOUSE_EVENTS = [
+    "LMB Click", "RMB Click", "MMB Click", "Mouse Click",
+    "Drag", "ScrollUp", "ScrollDown"
+];
+
+function isMouseEvent(label) {
+    return MOUSE_EVENTS.indexOf(label) !== -1;
+}
+
 function display(label) {
     if (DISPLAY[label] !== undefined)
         return DISPLAY[label];
+    if (/^F(?:[1-9]|1[0-2])$/.test(label))
+        return { label: label, category: "function" };
     if (typeof label === "string" && label.length === 1 && /[a-zA-Z0-9]/.test(label))
         return { label: label, category: "letter" };
     return { label: String(label) };
