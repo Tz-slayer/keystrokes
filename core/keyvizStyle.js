@@ -95,9 +95,11 @@ function exportStyle(data) {
         });
     });
     // Upstream requires mouse on import. Preserve supplied mouse values without
-    // applying them to this plugin, or include upstream defaults for portability.
-    output.mouse = data && data.keyvizMouseStyle || {showClicks: false, size: 150, color: "#009dff", keepHighlight: true,
-        showIndicator: true, indicatorSize: 50, indicatorOffsetX: 50, indicatorOffsetY: 50};
+    // applying them to this plugin, or include upstream defaults for portability
+    // (key_style.ts createKeyStyleStore): a file this produces imports cleanly
+    // into keyviz itself, which only checks that the eight sections exist.
+    output.mouse = data && data.keyvizMouseStyle || {showClicks: false, size: 150, color: "#009dff", keepHighlight: false,
+        showIndicator: true, keepIndicator: true, indicatorSize: 50, indicatorOffsetX: 50, indicatorOffsetY: 50};
     return output;
 }
 
