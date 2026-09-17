@@ -45,7 +45,7 @@ git clone <this-repo> ~/.config/DankMaterialShell/plugins/keystrokes
 - None/fade/zoom/float/slide animations; horizontal/vertical history with a configurable limit.
 - Monitor selection, nine screen positions, independent or linked X/Y margins and per-group backgrounds.
 - All-key, modifier-first or custom-first-key filters; configurable global toggle shortcut (default Shift+F10).
-- Keyviz JSON style import/export, the 14 upstream palettes and randomization.
+- The 14 upstream color palettes and randomization.
 
 The non-mouse port follows the local Keyviz baseline `ee7fda1`. See
 [the parity and verification record](docs/keycap-style-parity.md) for scope and
@@ -84,9 +84,6 @@ The geometry comes from the skin, the colours from the settings (cap, secondary,
 label and border), so one set of values renders every skin. A stored value that
 names nothing that exists -- including one left behind by the retired custom
 styles -- resolves to PBT.
-
-Whole themes move between installs with the Keyviz style JSON card in the
-settings page, which imports and exports keyviz's native format.
 
 ## Usage
 
@@ -134,10 +131,10 @@ separate groups; replacement mode reuses a single group. Left/right modifier key
 retain independent physical state. Shift+F10 toggles visibility; the input listener
 stays active while hidden so the shortcut can enable it again.
 
-The settings page accepts native Keyviz style JSON in **Style Import / Export**.
-Mouse data is preserved for roundtrip export but is not applied. You can also use
-`dms ipc call keystrokes exportStyle` and `dms ipc call keystrokes importStyle '<json>'`.
-Colors are CSS `#RRGGBB` or `#RRGGBBAA` (alpha last).
+`dms ipc call keystrokes exportStyle` emits the whole theme as native Keyviz style
+JSON, and `dms ipc call keystrokes importStyle '<json>'` applies one; that is the only
+place the JSON format is exposed now, and mouse data is preserved by the export but
+never applied. Colors are CSS `#RRGGBB` or `#RRGGBBAA` (alpha last).
 
 Old `showNormalKeys`, `historyLimit`, and `marginSize` values migrate to the new
 filter/history/margin settings when no explicit new value exists. Obsolete outer
@@ -233,7 +230,7 @@ the border colours. Clicking a swatch opens DMS's own colour picker, which carri
 **opacity** slider — keyviz writes `#RRGGBBAA` and its default group panel is
 `#ffffff99`, so alpha has to survive the round trip; it is also why the circle sits on a
 checkerboard. The hex literal no longer takes space on the page: it is in the swatch's
-tooltip, and exact values still go through Style Import / Export. Swatches that differ
+tooltip. Swatches that differ
 from their default get a dot, and the row's reset resets all of them.
 `core/keycapColors.js` owns both directions of the CSS conversion (`cssToRgba`, `toCss`
 and `cssColor`): Qt's own parser cannot do it, because it reads an 8-digit hex as

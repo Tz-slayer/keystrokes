@@ -15,7 +15,7 @@ const ALLOWED = new Set([
   'StyledText', 'DankButton', 'DankDropdown', 'DankToggle', 'DankIcon', 'DankTextField',
   'SettingsCard', 'SectionTitle', 'UsageGuide', 'PluginAbout', 'CopyBox',
   'ToggleSettingPlus', 'SelectionSettingPlus', 'SliderSettingPlus',
-  'KeyvizRow', 'KeyvizValueSetting', 'KeyvizTextArea', 'KeyvizParitySettings',
+  'KeyvizRow', 'KeyvizValueSetting', 'KeyvizParitySettings',
   'KeyvizColorRow', 'KeyvizColorSwatch',
   'PluginSettings',
   // container/plumbing types a page may need around the rows

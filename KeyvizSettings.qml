@@ -43,13 +43,6 @@ import "core/keyvizStyle.js" as KeyvizStyle
         if (outer) root.refreshingControls = false;
     }
 
-    function currentStyle() {
-        const data = {};
-        Object.keys(KeyvizStyle.DEFAULTS).forEach(key => { data[key] = root.loadValue(key, KeyvizStyle.DEFAULTS[key]); });
-        data.keyvizMouseStyle = root.loadValue("keyvizMouseStyle", null);
-        return KeyvizStyle.exportStyle(data);
-    }
-
     // DankDropdown only speaks labels, so the palette name maps back to the
     // index KeyvizStyle.palette() takes.
     function paletteIndex(name) {
@@ -395,38 +388,6 @@ import "core/keyvizStyle.js" as KeyvizStyle
                 I18n.tr("Key combinations are rendered as visual keycaps, and standard typing as individual keycaps."),
                 I18n.tr("Ensure your user belongs to the <b>input</b> group to read keyboard events without root.")
             ]
-        }
-    }
-
-    SettingsCard {
-        SectionTitle { text: I18n.tr("Keyviz Style Import / Export"); icon: "import_export" }
-        KeyvizRow {
-            label: I18n.tr("Style JSON")
-            description: I18n.tr("Paste Keyviz style JSON and apply it, or export the current style below. Mouse settings are not applied.")
-            KeyvizTextArea {
-                id: styleJson
-                width: parent.width
-                placeholderText: "{ ... }"
-            }
-            Row {
-                spacing: Theme.spacingS
-                DankButton {
-                    text: I18n.tr("Export JSON")
-                    onClicked: { styleJson.text = JSON.stringify(root.currentStyle(), null, 2); styleStatus.text = I18n.tr("Select and copy the JSON above."); }
-                }
-                DankButton {
-                    text: I18n.tr("Apply JSON")
-                    onClicked: {
-                        try {
-                            const values = KeyvizStyle.importStyle(JSON.parse(styleJson.text));
-                            Object.keys(values).forEach(key => root.saveValue(key, values[key]));
-                            root.refreshControls(root);
-                            styleStatus.text = I18n.tr("Style applied.");
-                        } catch (error) { styleStatus.text = error.message; }
-                    }
-                }
-            }
-            StyledText { id: styleStatus; width: parent.width; wrapMode: Text.WordWrap; color: Theme.surfaceVariantText }
         }
     }
 
