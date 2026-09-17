@@ -37,20 +37,9 @@ PluginComponent {
             return "SUCCESS";
         }
 
-        // List currently loaded custom styles (JSON array of ids)
-        function styles(): string {
-            return JSON.stringify(Object.keys(root.customStyles || {}));
-        }
-
-        // Rescan ~/.config/DankMaterialShell/keyviz_styles/ for style JSONs
-        function rescan(): string {
-            root.scanStyles();
-            return "SUCCESS";
-        }
-
-        // Switch the keycap skin by id: minimal | laptop | lowprofile | pbt,
-        // or any custom style id. The legacy ids elevated / mechanical are
-        // still accepted and mapped onto lowprofile / pbt.
+        // Switch the keycap skin by id: minimal | laptop | lowprofile | pbt.
+        // The legacy ids elevated / mechanical are still accepted and mapped
+        // onto lowprofile / pbt.
         function setStyle(id: string): string {
             root.saveSetting("keycapStyle", id);
             return "SUCCESS";
@@ -177,11 +166,6 @@ PluginComponent {
     property bool scrollActive: false
     property int scrollDirection: 0
 
-    // ── custom keycap styles ──
-    // User JSON style files are read from ~/.config/DankMaterialShell/keyviz_styles/
-    // (one style per file, see README). id = filename without .json
-    property var customStyles: ({})
-
     // ── keycap skins ────────────────────────────────────────────────────────
     // keyviz ships four (src/components/keycaps/*.tsx). Colours and geometry are
     // key_style.ts defaults: cap #ffffff, base wall #1a1a1a, label #000000,
@@ -189,8 +173,8 @@ PluginComponent {
     //
     // This plugin used to offer three skins called minimal / elevated /
     // mechanical. The two non-keyviz names are aliased onto the keyviz skins
-    // they were imitating, so existing settings and custom style JSONs that
-    // still say "elevated" or "mechanical" keep working.
+    // they were imitating, so a setting that still says "elevated" or
+    // "mechanical" keeps working.
     readonly property var keycapSkinAliases: ({
         "elevated": "lowprofile",
         "mechanical": "pbt"
@@ -202,8 +186,9 @@ PluginComponent {
     }
 
     // Resolved skin parameters consumed by the overlay's Keycap renderer.
-    // Built-ins use the keyviz look (white cap / dark base, theme-independent);
-    // custom styles fall back per-field to the defaults of their skin.
+    // Skins carry their geometry; every colour comes from the settings above,
+    // which are rendered with the keyviz look (white cap / dark base,
+    // theme-independent).
     readonly property var styleParams: {
         const common = {
             baseColor: KeycapColors.cssColor(config.capColor), secondaryColor: KeycapColors.cssColor(config.secondaryColor),
@@ -221,19 +206,7 @@ PluginComponent {
             // 2.75em shell holding a 2.2em inset face sliding 0.15em
             "pbt": Object.assign({}, common, { type: "pbt" })
         };
-        const builtin = skins[root.keycapSkin] ?? skins["pbt"];
-        const custom = (root.customStyles || {})[root.keycapStyle];
-        if (!custom)
-            return builtin;
-        // A custom JSON may still declare one of the legacy type names.
-        const customSkin = root.keycapSkinAliases[custom.type] ?? custom.type;
-        const base = skins[customSkin] ?? builtin;
-        const merged = Object.assign({}, base, custom);
-        merged.type = skins[customSkin] !== undefined ? customSkin : base.type;
-        ["baseColor", "secondaryColor", "textColor", "borderColor"].forEach(key => {
-            if (typeof merged[key] === "string") merged[key] = KeycapColors.cssColor(merged[key]);
-        });
-        return merged;
+        return skins[root.keycapSkin] ?? skins["pbt"];
     }
 
     // Modifiers state
@@ -342,54 +315,7 @@ print(json.dumps(devs))
             pluginService.pluginInstances = newInstances;
         }
         checkTools();
-        scanStyles();
         scanDevices();
-    }
-
-    // Scan ~/.config/DankMaterialShell/keyviz_styles/ for user style JSONs
-    function scanStyles() {
-        console.log("[Keyviz] Scanning custom styles");
-        styleScanProc.running = false;
-        styleScanProc.running = true;
-    }
-
-    Process {
-        id: styleScanProc
-        command: ["python3", "-c", `
-import os, json
-d = os.path.expanduser("~/.config/DankMaterialShell/keyviz_styles")
-out = {}
-if os.path.isdir(d):
-    for f in sorted(os.listdir(d)):
-        if not f.endswith(".json"):
-            continue
-        try:
-            data = json.load(open(os.path.join(d, f), encoding="utf-8"))
-            if isinstance(data, dict) and isinstance(data.get("type"), str):
-                out[f[:-5]] = data
-        except Exception as e:
-            print("skipped " + f + ": " + str(e), file=os.sys.stderr)
-print(json.dumps(out))
-`]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => {
-                const line = data.trim();
-                if (line.length === 0)
-                    return;
-                if (!line.startsWith("{")) {
-                    console.warn("[Keyviz] style scan:", line);
-                    return;
-                }
-                try {
-                    root.customStyles = JSON.parse(line);
-                    console.log("[Keyviz] Loaded custom styles:", Object.keys(root.customStyles).join(", ") || "(none)");
-                } catch (e) {
-                    console.warn("[Keyviz] Failed to parse custom style scan output:", e);
-                }
-            }
-        }
-        stderr: StdioCollector {}
     }
 
     onSelectedDevicePathChanged: {

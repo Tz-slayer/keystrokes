@@ -71,41 +71,22 @@ Selecting Minimal also selects icon text mode, enables icons and disables
 modifier highlighting, matching Keyviz's settings interaction. Saved legacy
 `elevated` and `mechanical` names remain aliases.
 
-### Custom Styles
+The four skins are ports of keyviz's own keycaps (`src/components/keycaps/*.tsx`):
 
-Drop a JSON file into `~/.config/DankMaterialShell/keyviz_styles/` (filename without `.json` becomes the style id), then reopen the settings page. A ready-to-edit [`styles/TEMPLATE.json.example`](styles/TEMPLATE.json.example) ships with the plugin.
-
-```json
-{
-    "name": "My Style",           // display name in the dropdown
-    "type": "lowprofile",         // renderer shape: minimal | laptop | lowprofile | pbt
-    "baseColor": "#2a2e33",       // cap face colour
-    "secondaryColor": "#16181b",  // base wall / shell colour
-    "textColor": "#e6e6e6",       // label colour
-    "borderColor": "#3a3f46",     // outline colour
-    "borderWidth": 1,             // outline width in px
-    "cornerRadius": 0.35,         // 0..1, multiplied by font size
-    "gradient": true              // face gradient (laptop vertical, pbt horizontal)
-}
-```
-
-Any omitted field falls back to the built-in colours of the chosen `type`. See
-[`styles/example-nord.json`](styles/example-nord.json) for a complete custom theme.
-
-The four built-in `type`s are ports of keyviz's own keycap skins
-(`src/components/keycaps/*.tsx`), so a custom style only needs to change colours
-and radii -- the geometry comes from the skin:
-
-| `type` | keyviz source | what it draws |
+| skin | keyviz source | what it draws |
 |---|---|---|
 | `minimal` | `minimal.tsx` | no body at all; only the label/icon |
 | `laptop` | `laptop.tsx` | one face, inset highlight + drop shadow; never moves on press |
 | `lowprofile` | `lowprofile.tsx` | face sliding 0.25em into a base wall |
 | `pbt` | `pbt.tsx` | shell with a 2.2em face inset by 0.3em, sliding 0.15em |
 
-Older custom styles (and settings) that still say `type: "elevated"` or
-`type: "mechanical"` keep working: they are mapped onto `lowprofile` and `pbt`
-respectively.
+The geometry comes from the skin, the colours from the settings (cap, secondary,
+label and border), so one set of values renders every skin. A stored value that
+names nothing that exists -- including one left behind by the retired custom
+styles -- resolves to PBT.
+
+Whole themes move between installs with the Keyviz style JSON card in the
+settings page, which imports and exports keyviz's native format.
 
 ## Usage
 
@@ -125,12 +106,6 @@ dms ipc keystrokes enable
 
 # Disable the visualizer
 dms ipc keystrokes disable
-
-# List loaded custom keycap styles (JSON array of ids)
-dms ipc keystrokes styles
-
-# Rescan ~/.config/DankMaterialShell/keyviz_styles/ for new style files
-dms ipc keystrokes rescan
 
 # Show a Ctrl + Shift + A sample through the keyboard state machine
 dms ipc keystrokes test
@@ -230,7 +205,7 @@ three DMS entry points at the repository root may import `qs.*`.
 | `settings/` | settings sections and the shared row shell (`KeyvizRow`), the value/JSON fields | no — DMS widgets |
 | `dms/widgets/` | vendored copies of the DMS widgets the pages build on | no — vendored |
 | `tests/helpers/` | the vm loader that runs `core/*.js` the way QML does | — |
-| `tests/`, `docs/`, `styles/`, `fonts/` | Node/Qt tests, parity records, style JSONs, bundled Inter | — |
+| `tests/`, `docs/`, `fonts/` | Node/Qt tests, parity records, bundled Inter | — |
 
 Three tests keep the boundaries honest:
 
@@ -311,13 +286,9 @@ Where the plugin deliberately departs from keyviz, the code says so (for example
 mute keycap, whose icon follows the sink's mute state instead of always drawing the
 crossed speaker).
 
-Two names keep "keyviz" on purpose: the core modules (`keyvizStyle.js`,
-`keyvizEvents.js`, `keyvizMotion.js`) and the custom style folder
-`~/.config/DankMaterialShell/keyviz_styles/`, because both hold keyviz's own format.
-
-Two names keep "keyviz" on purpose: the core modules (`keyvizStyle.js`,
-`keyvizEvents.js`, `keyvizMotion.js`) and the custom style folder
-`~/.config/DankMaterialShell/keyviz_styles/`, because both hold keyviz's own format.
+One name keeps "keyviz" on purpose: the core modules (`keyvizStyle.js`,
+`keyvizEvents.js`, `keyvizMotion.js`), because they speak keyviz's own format
+and event model.
 
 ## License
 

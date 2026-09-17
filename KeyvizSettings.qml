@@ -13,21 +13,17 @@ import "core/keyvizStyle.js" as KeyvizStyle
 
         pluginId: "keystrokes"
 
-        // Daemon instance (for custom style list)
+        // Daemon instance (for the device list and the random-style seed)
         readonly property var daemon: PluginService.pluginInstances["keystrokes"]
 
-        readonly property var styleOptions: {
-            var opts = [
-                { label: I18n.tr("Minimal"), value: "minimal" },
-                { label: I18n.tr("Laptop"), value: "laptop" },
-                { label: I18n.tr("Low Profile"), value: "lowprofile" },
-                { label: I18n.tr("PBT"), value: "pbt" }
-            ];
-            const cs = daemon ? daemon.customStyles : {};
-            for (const id in cs)
-                opts.push({ label: (cs[id].name || id) + I18n.tr(" (custom)"), value: id });
-            return opts;
-        }
+        // The four keyviz skins. Unknown ids (a retired custom style among them)
+        // fall back to PBT in the daemon's styleParams.
+        readonly property var styleOptions: [
+            { label: I18n.tr("Minimal"), value: "minimal" },
+            { label: I18n.tr("Laptop"), value: "laptop" },
+            { label: I18n.tr("Low Profile"), value: "lowprofile" },
+            { label: I18n.tr("PBT"), value: "pbt" }
+        ]
 
 
     // Device discovery lives in the daemon; only the "auto" entry is UI text.
@@ -154,7 +150,7 @@ import "core/keyvizStyle.js" as KeyvizStyle
             id: keycapStyleSetting
             settingKey: "keycapStyle"
             label: I18n.tr("Keycap Style")
-            description: I18n.tr("Keycap skin, ported 1:1 from keyviz (Minimal / Laptop / Low Profile / PBT). Add custom styles: drop a JSON file into ~/.config/DankMaterialShell/keyviz_styles/ and reopen this page")
+            description: I18n.tr("Keycap skin, ported 1:1 from keyviz (Minimal / Laptop / Low Profile / PBT)")
             options: root.styleOptions
             defaultValue: "lowprofile"
             onValueChanged: {
@@ -372,9 +368,7 @@ import "core/keyvizStyle.js" as KeyvizStyle
                     { text: "dms ipc keystrokes toggle", label: I18n.tr("Toggle visualizer") },
                     { text: "dms ipc keystrokes enable", label: I18n.tr("Enable visualizer") },
                     { text: "dms ipc keystrokes disable", label: I18n.tr("Disable visualizer") },
-                    { text: "dms ipc keystrokes test", label: I18n.tr("Preview a sample keystroke") },
-                    { text: "dms ipc keystrokes styles", label: I18n.tr("List loaded custom styles") },
-                    { text: "dms ipc keystrokes rescan", label: I18n.tr("Rescan the custom style folder") }
+                    { text: "dms ipc keystrokes test", label: I18n.tr("Preview a sample keystroke") }
                 ]
 
                 delegate: CopyBox {
