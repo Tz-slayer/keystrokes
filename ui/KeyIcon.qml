@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import "KeyIcons.js" as KeyIcons
+import "../core/KeyIcons.js" as KeyIcons
 
 // Combining SVG subpaths preserves every path, including icons with more than
 // five segments. Every segment uses the same Lucide stroke settings.

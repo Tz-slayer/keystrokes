@@ -44,6 +44,22 @@ function crossOffset(alignment, startWord, endWord, available, size) {
     return (available - size) / 2;
 }
 
+// The output the overlay should commit to, or "" when the focus is *unknown*.
+// "" is a signal, not a fallback: the caller must keep the output it already
+// has. CompositorService.getFocusedScreen() cannot express that -- it answers
+// screens[0] whenever the compositor fails to name the focused output, which
+// is indistinguishable from a real move to the first output. A workspace
+// switch can drop the focused output for a moment, and that used to yank the
+// window (and rebuild every keycap) onto another monitor.
+function focusedTarget(followsFocus, configured, focusedName, available) {
+    if (!followsFocus)
+        return screenName(configured, "", available);
+    const names = available || [];
+    if (focusedName && names.indexOf(focusedName) !== -1)
+        return focusedName;
+    return "";
+}
+
 function targets(horizontal, alignment, marginX, marginY, viewportWidth, viewportHeight, items, gap) {
     const list = items || [];
     let contentWidth = 0;

@@ -1,10 +1,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const style = vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(__dirname,'..','keyvizStyle.js'),'utf8'),style,{filename:path.resolve(__dirname,'../keyvizStyle.js')});
+const {loadCore} = require('./helpers/load.cjs');
+const style = loadCore(['keyvizStyle.js']);
 const plain = value => JSON.parse(JSON.stringify(value));
 
 test('Keyviz defaults and native JSON roundtrip preserve every nonmouse field', () => {

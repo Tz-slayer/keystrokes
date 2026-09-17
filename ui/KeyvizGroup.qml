@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Effects
+import "../core/keyvizMotion.js" as KeyvizMotion
+import "../core/listModelSync.js" as ListModelSync
 
 Item {
     id: group
@@ -8,6 +10,9 @@ Item {
     property bool latest: false
     property bool dying: false
     property bool entered: false
+    // True when this group belongs to a re-created overlay window: the keycaps
+    // were already on screen, so the group must not fade in again.
+    property bool restored: false
     signal contentGeometryChanged
     readonly property int duration: settings.animDuration
     readonly property real padX: settings.groupBackground ? settings.capFontSize * 0.4 : 0
@@ -21,32 +26,35 @@ Item {
     onWidthChanged: contentGeometryChanged()
     onHeightChanged: contentGeometryChanged()
     opacity: dying || (!entered && settings.config.showEventHistory) ? 0 : 1
-    Behavior on opacity { NumberAnimation { duration: group.settings.config.showEventHistory ? group.duration : 0; easing.type: Easing.BezierSpline; easing.bezierCurve: group.dying ? [0.76,0,0.68,0,1,1] : [0.23,1,0.32,1,1,1] } }
+    Behavior on opacity {
+        NumberAnimation {
+            duration: group.settings.config.showEventHistory ? group.duration : 0
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: KeyvizMotion.curve(group.dying)
+        }
+    }
 
     ListModel { id: caps }
     function sync() {
-        const labels = keys.map(key => key.keyId || key.label);
-        for (let i = caps.count - 1; i >= 0; i--) {
-            if (!labels.includes(caps.get(i).keyId)) {
-                if (!duration) caps.remove(i);
-                else caps.setProperty(i, "dying", true);
-            }
-        }
-        keys.forEach((key, index) => {
-            let found = -1;
-            for (let i = 0; i < caps.count; i++) if (caps.get(i).keyId === (key.keyId || key.label)) { found = i; break; }
-            const value = {keyId: key.keyId || key.label, label: key.label, count: key.count,
-                           animateIn: key.animateIn !== false, dying: false,
-                           last: index === keys.length - 1};
-            if (found < 0) caps.append(value);
-            else caps.set(found, value);
+        ListModelSync.reconcile(caps, keys, {
+            keyField: "keyId",
+            keyOf: key => key.keyId || key.label,
+            animate: duration > 0,
+            valueOf: (key, index) => ({
+                keyId: key.keyId || key.label,
+                label: key.label,
+                count: key.count,
+                animateIn: key.animateIn !== false,
+                dying: false,
+                last: index === keys.length - 1
+            })
         });
     }
     function removeLabel(label) {
-        for (let i = 0; i < caps.count; i++) if (caps.get(i).keyId === label && caps.get(i).dying) { caps.remove(i); return; }
+        ListModelSync.removeByKey(caps, "keyId", label);
     }
     onKeysChanged: sync()
-    Component.onCompleted: { sync(); Qt.callLater(() => entered = true); }
+    Component.onCompleted: { sync(); if (restored) entered = true; else Qt.callLater(() => entered = true); }
 
     Item {
         anchors.fill: parent
@@ -60,7 +68,14 @@ Item {
             x: group.padX
             y: group.padY
             spacing: group.settings.capFontSize * (group.settings.styleParams.type === "minimal" ? 0.15 : 0.3)
-            move: Transition { NumberAnimation { properties: "x,y"; duration: group.duration / 3; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.23,1,0.32,1,1,1] } }
+            move: Transition {
+                NumberAnimation {
+                    properties: "x,y"
+                    duration: KeyvizMotion.reflowDuration(group.duration)
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: KeyvizMotion.enterCurve()
+                }
+            }
             Repeater {
                 model: caps
                 delegate: Item {
@@ -76,14 +91,14 @@ Item {
                     // only the newly pressed key uses the entrance variant.
                     property bool entered: !animateIn
                     readonly property bool hiddenState: dying || group.dying || !entered
-                    readonly property var curve: hiddenState ? [0.76,0,0.68,0,1,1] : [0.23,1,0.32,1,1,1]
+                    readonly property var curve: KeyvizMotion.curve(unit.hiddenState)
                     width: cap.width
                     height: cap.height
-                    opacity: group.settings.animType === "none" ? 1 : (hiddenState ? 0 : 1)
-                    scale: group.settings.animType === "zoom" && hiddenState ? 0 : 1
+                    opacity: KeyvizMotion.opacity(group.settings.animType, unit.hiddenState)
+                    scale: KeyvizMotion.scale(group.settings.animType, unit.hiddenState)
                     transform: Translate {
-                        x: group.settings.animType === "slide" && unit.hiddenState ? group.settings.capFontSize : 0
-                        y: group.settings.animType === "float" && unit.hiddenState ? group.settings.capFontSize : 0
+                        x: KeyvizMotion.offset(group.settings.animType, "x", group.settings.capFontSize, unit.hiddenState)
+                        y: KeyvizMotion.offset(group.settings.animType, "y", group.settings.capFontSize, unit.hiddenState)
                         Behavior on x { NumberAnimation { duration: group.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: unit.curve } }
                         Behavior on y { NumberAnimation { duration: group.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: unit.curve } }
                     }

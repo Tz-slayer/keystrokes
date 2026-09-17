@@ -5,18 +5,21 @@ import qs.Common
 import qs.Services
 import qs.Widgets
 import qs.Modules.Plugins
-import "keyMapper.js" as KeyMapper
-import "keyvizStyle.js" as KeyvizStyle
-import "keyvizEvents.js" as KeyvizEvents
+import "core/keyMapper.js" as KeyMapper
+import "core/keyvizStyle.js" as KeyvizStyle
+import "core/keyvizEvents.js" as KeyvizEvents
+import "core/keycapColors.js" as KeycapColors
+import "core/inputParse.js" as InputParse
+import "ui"
 
 PluginComponent {
     id: root
 
-    pluginId: "keyviz"
+    pluginId: "keystrokes"
     pluginService: PluginService
 
     IpcHandler {
-        target: "keyviz"
+        target: "keystrokes"
         enabled: true
 
         function toggle(): string {
@@ -88,12 +91,7 @@ PluginComponent {
     // way and displays another. The values themselves follow keyviz's own
     // defaults (src/stores/key_style.ts, src/stores/key_event.ts).
     readonly property bool enabled: root.pluginData.enabled ?? true
-    // keyviz: key_event.ts lingerDurationMs, 5000
-    readonly property int fadeTimeout: root.config.fadeTimeout
     readonly property bool showNormalKeys: root.pluginData.showNormalKeys ?? false
-    // keyviz: key_style.ts text.size, 32
-    readonly property int fontSize: root.config.fontSize
-    readonly property string position: root.config.position
     readonly property string selectedDevicePath: root.pluginData.selectedDevicePath ?? "all"
     // keyviz calls this showMouseEvents (key_event.ts) and it gates clicks,
     // drag and the wheel alike. The old key is still honoured so existing
@@ -122,14 +120,6 @@ PluginComponent {
     // so a stored "elevated" still resolves to lowprofile.
     readonly property string keycapStyle: root.config.keycapStyle
     readonly property bool showShortcuts: root.pluginData.showShortcuts ?? true
-    readonly property string textColorMode: root.pluginData.textColorMode ?? "default"
-    readonly property string textColorCustom: root.pluginData.textColorCustom ?? "#6750A4"
-    readonly property string keycapTextColorMode: root.pluginData.keycapTextColorMode ?? "default"
-    readonly property string keycapTextColorCustom: root.pluginData.keycapTextColorCustom ?? "#6750A4"
-    readonly property int charLimit: root.pluginData.charLimit ?? 20
-    readonly property bool roundedKeycaps: root.pluginData.roundedKeycaps ?? true
-    readonly property int overlayOpacity: root.pluginData.overlayOpacity ?? 100
-    readonly property int marginSize: root.pluginData.marginSize ?? 24
     // keyviz: key_event.ts `filter`, default "modifiers". The plugin used to
     // ship `showOnlyModifiers` for this; the gate below supersedes it (it also
     // covers combinations and press order), so the old key is only read for the
@@ -146,56 +136,24 @@ PluginComponent {
     // the comma-separated string the settings page edits.
     readonly property var allowedKeys: String(root.pluginData.allowedKeys ?? "Ctrl,Super,Alt")
         .split(",").map(function (s) { return s.trim(); }).filter(function (s) { return s !== ""; })
-    readonly property bool ignoreFilterKeys: root.pluginData.ignoreFilterKeys ?? true
     readonly property bool macSymbols: root.pluginData.macSymbols ?? false
     readonly property bool showModifierStatus: root.pluginData.showModifierStatus ?? false
-    // keyviz: key_style.ts -> layout.showPressCount, default true
-    readonly property bool showPressCount: root.config.showPressCount
-    // keyviz puts no separator between caps, only a gap (key-overlay.tsx:
-    // `columnGap: text.size * 0.3`). Default to empty to match; set it to "+"
-    // or anything else to get the old behaviour back.
-    readonly property string customSeparator: root.pluginData.customSeparator ?? ""
-    readonly property int historyLimit: root.config.showEventHistory ? root.config.maxHistory : 1
+    // Set by the overlay once it has rendered groups. The overlay window can be
+    // re-created (output change, reload) while this daemon keeps running; the
+    // rebuilt overlay then knows it must restore the existing keycaps at rest
+    // instead of replaying their entrance animation.
+    property bool overlayRendered: false
 
     // ── keyviz key_style.ts: text / layout ──────────────────────────────────
-    // These decide how a keycap's content is built (base.tsx) and how it is
-    // aligned inside the face. Defaults are keyviz's own.
-    readonly property string textVariant: root.config.textVariant
-    readonly property string textCaps: root.config.textCaps
-    readonly property string textAlignment: root.config.textAlignment
-    readonly property bool showIcon: root.config.showIcon
-    readonly property bool showSymbol: root.config.showSymbol
-    readonly property string iconAlignment: root.config.iconAlignment
+    // The overlay reads the resolved `config` for these; nothing here mirrors
+    // them, because a second copy is a second thing to keep in sync.
 
     // ── keyviz key_style.ts: background ─────────────────────────────────────
     // keyviz draws a rounded panel behind EVERY group (key-overlay.tsx
     // groupStyle) and keeps the overlay window itself fully transparent.
-    // keyviz's default is #ffffff99; the mode/custom pair mirrors how this
-    // plugin's other colour settings pick a DMS role or a literal colour.
-    readonly property bool groupBackground: root.config.groupBackground
-    readonly property string groupBackgroundMode: root.pluginData.groupBackgroundMode ?? "custom"
-    readonly property string groupBackgroundCustom: root.config.groupBackgroundCustom
-    // Qt parses an 8-digit hex string as #AARRGGBB, but keyviz writes CSS
-    // colours (#RRGGBBAA -- its default group panel is #ffffff99, i.e. white at
-    // 60%). Reading those two the same way silently turns the panel opaque, so
-    // 8-digit values are decoded explicitly as CSS here.
-    function cssColor(v) {
-        if (typeof v !== "string") return v;
-        if (/^#[0-9a-f]{4}$/i.test(v)) v = "#" + v.slice(1).split("").map(c => c+c).join("");
-        const m = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(v);
-        if (m)
-            return Qt.rgba(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255,
-                           parseInt(m[3], 16) / 255, parseInt(m[4], 16) / 255);
-        return Qt.color(v);
-    }
-    readonly property color groupBackgroundColor: root.cssColor(root.config.groupBackgroundCustom)
-    readonly property string bgColorMode: root.pluginData.bgColorMode ?? "default"
-    readonly property string bgColorCustom: root.pluginData.bgColorCustom ?? "#1e2326"
+    // keyviz's default is #ffffff99.
+    readonly property color groupBackgroundColor: KeycapColors.cssColor(root.config.groupBackgroundCustom)
     property var historyList: []
-
-    // Consecutive-repeat counter behind the keyviz press-count badge.
-    property string lastKeystrokeText: ""
-    property int repeatCount: 1
 
     // ── physically held keys (keyviz `pressedKeys`) ──
     // Display labels of the keys currently held down, in press order. The
@@ -209,11 +167,6 @@ PluginComponent {
     // carries accelerated per-event deltas, so accumulating them approximates
     // the distance the pointer covered on screen.
     property string mouseHeldButton: ""
-    // Modifiers that were down when the button went down, e.g. "Ctrl + ".
-    // keyviz renders Ctrl + click as a real combination (onKeyPress pushes the
-    // button onto the group the modifier already started), so the drag that may
-    // follow has to carry the same prefix instead of collapsing to a bare Drag.
-    property string mouseDragPrefix: ""
     property bool mouseDragging: false
     property real dragDistanceX: 0
     property real dragDistanceY: 0
@@ -223,11 +176,6 @@ PluginComponent {
     // once it has been idle for the linger interval.
     property bool scrollActive: false
     property int scrollDirection: 0
-
-    // Monotonic id so the overlay can tell "new group" (animate in) apart
-    // from "text updated in place" (e.g. the typing buffer growing)
-    property int historyUidCounter: 0
-    property int testCounter: 0
 
     // ── custom keycap styles ──
     // User JSON style files are read from ~/.config/DankMaterialShell/keyviz_styles/
@@ -258,8 +206,8 @@ PluginComponent {
     // custom styles fall back per-field to the defaults of their skin.
     readonly property var styleParams: {
         const common = {
-            baseColor: root.cssColor(config.capColor), secondaryColor: root.cssColor(config.secondaryColor),
-            textColor: root.cssColor(config.labelColor), borderColor: root.cssColor(config.borderColor),
+            baseColor: KeycapColors.cssColor(config.capColor), secondaryColor: KeycapColors.cssColor(config.secondaryColor),
+            textColor: KeycapColors.cssColor(config.labelColor), borderColor: KeycapColors.cssColor(config.borderColor),
             borderWidth: config.borderEnabled ? config.borderWidth : 0,
             cornerRadius: config.borderRadius, gradient: config.useGradient
         };
@@ -283,14 +231,10 @@ PluginComponent {
         const merged = Object.assign({}, base, custom);
         merged.type = skins[customSkin] !== undefined ? customSkin : base.type;
         ["baseColor", "secondaryColor", "textColor", "borderColor"].forEach(key => {
-            if (typeof merged[key] === "string") merged[key] = root.cssColor(merged[key]);
+            if (typeof merged[key] === "string") merged[key] = KeycapColors.cssColor(merged[key]);
         });
         return merged;
     }
-
-    // Output state
-    property string displayText: ""
-    property string textBuffer: ""
 
     // Modifiers state
     property bool ctrlActive: false
@@ -314,6 +258,83 @@ PluginComponent {
         : (root.hasLibinput ? "libinput" : "evtest")
     readonly property bool inputBroken: inputToolMissing || notInInputGroup
 
+    // Host input for the overlay: the name of the output holding the focused
+    // workspace, or "" when DMS cannot name one right now. Deliberately not
+    // CompositorService.getFocusedScreen(): that one answers screens[0] for an
+    // unnamed focus, which the overlay cannot tell apart from a real move, and a
+    // workspace switch would then yank the surface to another monitor.
+    readonly property string focusedOutputName: BarWidgetService.getFocusedScreenName() || ""
+
+    // Host input for the mute keycap's icon: whether the audio sink is muted.
+    // The same physical key means "muted" after one press and "unmuted" after
+    // the next, so the icon has to follow the sink rather than the key. DMS's
+    // audio service is the source of truth (the mute keybind on this shell is
+    // `dms ipc call audio mute`); it learns about the toggle from PipeWire a
+    // moment after the keypress, so the icon settles just after the keycap
+    // lands and keeps tracking the state for as long as the cap is on screen.
+    // Written without optional chaining: the runtime engine supports `?.`, but
+    // qmllint cannot parse it and the project keeps the lint gate honest.
+    readonly property bool systemMuted: {
+        const sink = AudioService.sink;
+        return (sink && sink.audio) ? sink.audio.muted : false;
+    }
+
+    // ── input devices ───────────────────────────────────────────────────────
+    // The Control Center widget and the settings page offer the same list, so
+    // the scan lives here and both read it; device labels come from the kernel
+    // (never translated), while the "auto" entry is UI text that each surface
+    // prepends in its own language.
+    readonly property string autoDeviceValue: "all"
+    property var deviceOptions: []
+    property bool devicesScanning: false
+
+    function scanDevices() {
+        const script = `
+import os, json, re
+include_pattern = "kanata"
+exclude_pattern = ["power button", "video bus", "speaker", "headphone", "lid switch", "touchpad", "extra buttons", "uinput", "server", "hitune", "inphic", "instant", "webcam", "video"]
+devs = []
+if os.path.exists('/proc/bus/input/devices'):
+    with open('/proc/bus/input/devices', encoding='utf-8', errors='replace') as f:
+        content = f.read()
+    sections = content.strip().split('\\n\\n')
+    for section in sections:
+        name = ""
+        handlers = ""
+        for line in section.split('\\n'):
+            if line.startswith('N: Name='):
+                m = re.search(r'Name="([^"]+)"', line)
+                if m: name = m.group(1)
+            elif line.startswith('H: Handlers='):
+                handlers = line.split('=')[1]
+        if name and handlers:
+            lower_name = name.lower()
+            is_included = include_pattern in lower_name
+            is_excluded = any(x in lower_name for x in exclude_pattern)
+            if 'kbd' in handlers and (is_included or ('mouse' not in handlers and not is_excluded)):
+                event_match = re.search(r'event(\\d+)', handlers)
+                if event_match:
+                    event_path = "/dev/input/event" + event_match.group(1)
+                    devs.append((name + " (" + event_path.split('/')[-1] + ")", event_path))
+print(json.dumps(devs))
+`;
+        root.devicesScanning = true;
+        Proc.runCommand("keyviz.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
+            root.devicesScanning = false;
+            if (exitCode !== 0) {
+                console.warn("[Keyviz] scanDevices command failed with exit code:", exitCode, stdout);
+                return;
+            }
+            try {
+                root.deviceOptions = JSON.parse(stdout.trim())
+                    .map(entry => ({label: entry[0], value: entry[1]}));
+            } catch (e) {
+                console.warn("[Keyviz] Failed to parse scanDevices output:", e, stdout);
+                root.deviceOptions = [];
+            }
+        });
+    }
+
     Component.onCompleted: {
         if (!pluginService.pluginInstances[pluginId]) {
             const newInstances = Object.assign({}, pluginService.pluginInstances);
@@ -322,6 +343,7 @@ PluginComponent {
         }
         checkTools();
         scanStyles();
+        scanDevices();
     }
 
     // Scan ~/.config/DankMaterialShell/keyviz_styles/ for user style JSONs
@@ -389,21 +411,6 @@ print(json.dumps(out))
         onTriggered: inputProc.running = true
     }
 
-    Timer {
-        id: fadeTimer
-        interval: root.fadeTimeout
-        onTriggered: {
-            // keyviz keeps a keycap on screen as long as its key is held
-            if (root.hasHeldVisibleKey()) {
-                fadeTimer.restart();
-                return;
-            }
-            root.displayText = "";
-            root.textBuffer = "";
-            root.historyList = [];
-        }
-    }
-
     function checkTools() {
         libinputCheck.running = false;
         libinputCheck.running = true;
@@ -450,43 +457,26 @@ print(json.dumps(out))
         return KeyMapper.getDisplayKey(keyName);
     }
 
-    // Track a key/button going down or up. Mirrors keyviz's pressedKeys array.
-    function setKeyHeld(label, down) {
-        const idx = root.heldKeys.indexOf(label);
-        if (down) {
-            if (idx !== -1) return;
-            const next = root.heldKeys.slice();
-            next.push(label);
-            root.heldKeys = next;
-        } else {
-            if (idx === -1) return;
-            const next = root.heldKeys.slice();
-            next.splice(idx, 1);
-            root.heldKeys = next;
-        }
+    // Press/release a label (a key name or a mouse keycap such as "ScrollDown")
+    // through the state machine, exactly as the keyboard path does.
+    function pressLabel(label) {
+        if (!label) return;
+        root.applyKeyboard(KeyvizEvents.press(root.keyboardState, label, Date.now(), root.eventConfig));
     }
 
-    // keyviz never expires a keycap while its key is still held down
-    // (tick() keeps any key that is in pressedKeys). Mirror that, but only for
-    // keys that are actually on screen — an unrelated held key must not pin the
-    // overlay open forever.
-    function hasHeldVisibleKey() {
-        if (root.heldKeys.length === 0) return false;
-        for (let i = 0; i < root.historyList.length; i++) {
-            const entry = root.historyList[i];
-            // A combo row holds several labels; a non-combo row is a single
-            // label (mouse click, or a standalone key when showNormalKeys is on).
-            // Both can be in the pressed state, so both must keep the overlay up.
-            const keys = entry.isCombo ? entry.text.split(" + ") : [entry.text];
-            for (let j = 0; j < keys.length; j++) {
-                if (root.heldKeys.indexOf(keys[j]) !== -1) return true;
-            }
-        }
-        return false;
+    function releaseLabel(label) {
+        if (!label || root.keyboardState.heldKeys.indexOf(label) === -1) return;
+        root.applyKeyboard(KeyvizEvents.release(root.keyboardState, label, Date.now()));
+    }
+
+    // The drag replaces the held button instead of leaving it on screen.
+    function dropLabel(label) {
+        if (!label) return;
+        root.applyKeyboard(KeyvizEvents.dropKey(root.keyboardState, label));
     }
 
     // Hold a set of keycaps for a moment so the press animation can be seen
-    // without touching the keyboard (`dms ipc keyviz test`).
+    // without touching the keyboard (`dms ipc keystrokes test`).
     Timer {
         id: previewReleaseTimer
         interval: 420
@@ -506,65 +496,15 @@ print(json.dumps(out))
         interval: 300
         onTriggered: {
             if (root.scrollDirection !== 0 && root.scrollActive)
-                root.setKeyHeld(root.scrollDirection > 0 ? "ScrollDown" : "ScrollUp", false);
+                root.releaseLabel(root.scrollDirection > 0 ? "ScrollDown" : "ScrollUp");
             root.scrollActive = false;
             root.scrollDirection = 0;
         }
     }
 
-    function previewPress(labels) {
-        root.heldKeys = labels;
-        previewReleaseTimer.restart();
-    }
-
-    function mouseButtonLabel(data) {
-        if (data.includes("BTN_LEFT") || data.includes("(272)")) return "LMB Click";
-        if (data.includes("BTN_RIGHT") || data.includes("(273)")) return "RMB Click";
-        if (data.includes("BTN_MIDDLE") || data.includes("(274)")) return "MMB Click";
-        return "Mouse Click";
-    }
-
-    // `forceNewEntry` opts out of the in-place rewrite of a trailing non-combo
-    // entry, so a keycap can be appended even when the newest entry happens to
-    // be plain text. Needed by the button -> Drag swap, which must not silently
-    // overwrite an unrelated keycap.
-    function addKeystroke(text, isCombo, forceNewEntry) {
-        fadeTimer.stop();
-        // keyviz counts consecutive repeats of the same key event: KeyEvent is
-        // constructed with pressedCount 1 and press() bumps it when the key is
-        // already in the last group (types/event.ts:206-213, key_event.ts:158).
-        // The daemon works with rendered combo strings, so the equivalent is
-        // "the same keystroke text again". Held modifier + repeated key is the
-        // canonical case: hold Ctrl and tap I twice -> "Ctrl + I", "Ctrl + I".
-        if (text === root.lastKeystrokeText)
-            root.repeatCount++;
-        else
-            root.repeatCount = 1;
-        root.lastKeystrokeText = text;
-
-        let newList = root.historyList.slice();
-        const lastItem = newList.length > 0 ? newList[newList.length - 1] : null;
-        if (!forceNewEntry && lastItem && !lastItem.isCombo && !isCombo) {
-            // Continuing typing stream: update the entry in place so the
-            // overlay animates it only when it first appears
-            lastItem.text = text;
-            lastItem.count = root.repeatCount;
-        } else {
-            root.historyUidCounter++;
-            newList.push({ uid: root.historyUidCounter, text: text, isCombo: isCombo,
-                           count: root.repeatCount });
-            while (newList.length > root.historyLimit) {
-                newList.shift();
-            }
-        }
-        root.historyList = newList;
-        root.displayText = "has_content";
-        fadeTimer.start();
-    }
-
     // keyviz's trigger rule. `heldKeys` is maintained in physical press order by
-    // setKeyHeld() and already contains the key being handled, which is exactly
-    // what the rule needs:
+    // the state machine and already contains the key being handled, which is
+    // exactly what the rule needs:
     //   - a lone modifier passes, because it *is* a modifier
     //   - Ctrl-then-A passes, because the first pressed key is a modifier
     //   - A-then-Ctrl does NOT, because A was pressed first
@@ -583,10 +523,9 @@ print(json.dumps(out))
         root.shiftActive = root.heldKeys.includes("Shift");
         root.superActive = root.heldKeys.includes("Super");
         root.historyList = state.groups.map(g => ({uid: g.uid, text: g.keys.map(k => root.displayKeyLabel(k.label)).join(" + "),
-            isCombo: true, count: g.keys.length ? g.keys[g.keys.length-1].count : 1,
+            isCombo: g.keys.length > 1, count: g.keys.length ? g.keys[g.keys.length-1].count : 1,
             keys: g.keys.map(k => ({label: root.displayKeyLabel(k.label), keyId: k.label,
                                     count: k.count, animateIn: k.animateIn !== false}))}));
-        root.displayText = state.groups.length ? "has_content" : "";
     }
 
     function handleKeyPress(keyName) {
@@ -601,7 +540,6 @@ print(json.dumps(out))
             return;
         }
         if (!root.enabled || !label) return;
-        fadeTimer.stop();
         root.applyKeyboard(KeyvizEvents.press(root.keyboardState, keyName, Date.now(), root.eventConfig));
     }
 
@@ -621,40 +559,28 @@ print(json.dumps(out))
         }
     }
 
-    // Active Ctrl/Alt/Super in keyviz order. Shift is left out on purpose: the
-    // plugin treats Shift + key as typing, not as a shortcut.
-    function activeModifiers() {
-        let m = [];
-        if (root.ctrlActive) m.push("Ctrl");
-        if (root.altActive) m.push("Alt");
-        if (root.superActive) m.push("Super");
-        return m;
-    }
-
+    // keyviz: key_event.ts onMouseButtonPress. The button is pressed as a key,
+    // so a held modifier and the button end up in the same group and the button
+    // keycap shows the pressed animation.
     function handleMouseClick(buttonName) {
         if (!root.enabled || !root.showMouseEvents || !root.eventAllowed(buttonName)) return;
-        root.textBuffer = "";
         // Arm drag tracking: keyviz remembers the press position and only swaps
         // the button keycap for Drag once the threshold is passed.
-        const mods = root.activeModifiers();
-        root.mouseDragPrefix = mods.length > 0 ? mods.join(" + ") + " + " : "";
         root.mouseHeldButton = buttonName;
         root.mouseDragging = false;
         root.dragDistanceX = 0;
         root.dragDistanceY = 0;
-        if (mods.length > 0)
-            root.addKeystroke(root.mouseDragPrefix + buttonName, true);
-        else
-            root.addKeystroke(buttonName, false);
+        root.pressLabel(buttonName);
     }
 
+    // keyviz: key_event.ts onMouseButtonRelease. A drag release releases the
+    // `Drag` keycap; a plain release releases the button itself.
     function endMouseDrag() {
-        // startDrag() holds the bare "Drag" label; the modifier prefix only ever
-        // affects the rendered text, so release the same key it was held with.
         if (root.mouseDragging)
-            root.setKeyHeld("Drag", false);
+            root.releaseLabel("Drag");
+        else
+            root.releaseLabel(root.mouseHeldButton);
         root.mouseHeldButton = "";
-        root.mouseDragPrefix = "";
         root.mouseDragging = false;
         root.dragDistanceX = 0;
         root.dragDistanceY = 0;
@@ -665,13 +591,10 @@ print(json.dumps(out))
     // already carry libinput's acceleration (raw evdev does not).
     function startDrag() {
         root.mouseDragging = true;
-        root.setKeyHeld(root.mouseHeldButton, false);
-        root.setKeyHeld("Drag", true);
-        const last = root.historyList.length > 0
-            ? root.historyList[root.historyList.length - 1] : null;
-        const lastIsButton = last && !last.isCombo && last.text === root.mouseHeldButton;
-        const label = root.mouseDragPrefix + "Drag";
-        root.addKeystroke(label, root.mouseDragPrefix !== "", !lastIsButton);
+        // The button keycap is replaced, not left behind (keyviz drops it from
+        // pressedKeys and from the last group before pressing Drag).
+        root.dropLabel(root.mouseHeldButton);
+        root.pressLabel("Drag");
     }
 
     function accumulateDrag(dx, dy) {
@@ -684,39 +607,19 @@ print(json.dumps(out))
         root.startDrag();
     }
 
-    function handlePointerMotion(data) {
+    // evtest fallback (single-device mode without libinput): the parsed axis of
+    // one REL_* line. Motion only feeds drag tracking, which is armed by a
+    // button press that already passed the gate, so it needs no filter check.
+    function handleRelativeAxis(axis, value) {
         if (!root.enabled || !root.showMouseEvents) return;
-        // libinput prints "  1.28/ -1.28 ( +1.00/ -1.00)": the first pair is the
-        // accelerated dx/dy, the parenthesised one the raw device deltas. The
-        // accelerated pair is the one that matches what the cursor does on
-        // screen, so it is the pair keyviz's dragThreshold should be measured
-        // against.
-        const m = data.match(/([+-]?[\d.]+)\/\s*([+-]?[\d.]+)/);
-        if (!m) return;
-        root.accumulateDrag(parseFloat(m[1]), parseFloat(m[2]));
-    }
-
-    // evtest fallback (single-device mode without libinput): one axis per line,
-    // e.g. "Event: time ... type 2 (EV_REL), code 0 (REL_X), value 12".
-    function handleRelativeAxis(data) {
-        // Motion, not a press: it only feeds drag tracking, which is armed by a
-        // button press that already passed the gate. No separate filter check.
-        if (!root.enabled || !root.showMouseEvents || root.mouseHeldButton === "") return;
-        const codeMatch = data.match(/code\s+(\d+)\s+\((REL_[A-Z_]+)\)/);
-        const valueMatch = data.match(/value\s+(-?\d+)/);
-        if (!codeMatch || !valueMatch) return;
-        const axis = codeMatch[2];
-        const value = parseInt(valueMatch[1]);
-        if (axis === "REL_WHEEL" || axis === "REL_HWHEEL") {
-            if (value === 0) return;
-            // REL_WHEEL +1 is physically up (X11 button 4), which is -1 here.
-            const dir = value > 0 ? -1 : 1;
+        const dir = InputParse.wheelDirection(axis, value);
+        if (dir !== 0) {
             if (root.scrollActive && root.scrollDirection === dir) {
                 scrollLingerTimer.restart();
                 return;
             }
             root.showScrollKey(dir);
-        } else if (axis === "REL_X" || axis === "REL_Y") {
+        } else if (root.mouseHeldButton !== "" && (axis === "REL_X" || axis === "REL_Y")) {
             root.accumulateDrag(axis === "REL_X" ? value : 0,
                                 axis === "REL_Y" ? value : 0);
         }
@@ -730,34 +633,19 @@ print(json.dumps(out))
         // Reverse direction mid-scroll: drop the old keycap first so it does not
         // linger in `heldKeys`.
         if (root.scrollActive && root.scrollDirection !== 0 && root.scrollDirection !== dir)
-            root.setKeyHeld(root.scrollDirection > 0 ? "ScrollDown" : "ScrollUp", false);
+            root.releaseLabel(root.scrollDirection > 0 ? "ScrollDown" : "ScrollUp");
         root.scrollActive = true;
         root.scrollDirection = dir;
-        const label = dir > 0 ? "ScrollDown" : "ScrollUp";
-        root.setKeyHeld(label, true);
-        root.textBuffer = "";
-        // Ctrl + wheel is a real shortcut (browser zoom); render it as the same
-        // kind of combination as Ctrl + click instead of a bare wheel keycap.
-        const mods = root.activeModifiers();
-        const prefix = mods.length > 0 ? mods.join(" + ") + " + " : "";
-        root.addKeystroke(prefix + label, prefix !== "", false);
+        // The wheel is simulated as a key press (keyviz onMouseWheel), so a held
+        // modifier and the wheel tick share one group: Ctrl + wheel renders as
+        // the same kind of combination as Ctrl + click, and a held Super (niri's
+        // workspace switch) stays put instead of being redrawn.
+        root.pressLabel(dir > 0 ? "ScrollDown" : "ScrollUp");
         scrollLingerTimer.restart();
     }
 
-    function handleScroll(data) {
+    function handleScroll(dir) {
         if (!root.enabled || !root.showMouseEvents) return;
-        // "vert 15.00/120.0* horiz 0.00/0.0 (wheel)"
-        const m = data.match(/vert\s+(-?[\d.]+)\/(-?[\d.]+)/);
-        if (!m) return;
-        // The angle (second value) is the notch count * 120; the first value is
-        // the unaccelerated remainder.
-        // Touchpad scrolling (POINTER_SCROLL_FINGER / _CONTINUOUS) reports a
-        // plain pixel delta with no v120 component, so fall back to it.
-        let value = parseFloat(m[2]);
-        if (!(value > 0) && !(value < 0))
-            value = parseFloat(m[1]);
-        if (!(value > 0) && !(value < 0)) return;
-        const dir = value > 0 ? 1 : -1;
         // The gate runs once the direction is known, so it can name the label
         // keyviz would have pushed.
         if (!root.eventAllowed(dir > 0 ? "ScrollDown" : "ScrollUp")) return;
@@ -789,45 +677,37 @@ print(json.dumps(out))
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: data => {
-                if (data.includes("EV_KEY")) {
-                    const keyMatch = data.match(/(KEY_[A-Z0-9_]+)/);
-                    if (keyMatch) {
-                        const keyName = keyMatch[1];
-                        if (data.includes("value 1")) {
-                            root.handleKeyPress(keyName);
-                        } else if (data.includes("value 0")) {
-                            root.handleKeyRelease(keyName);
-                        }
-                    }
-                } else if (data.includes("KEYBOARD_KEY")) {
-                    const keyMatch = data.match(/(KEY_[A-Z0-9_]+)/);
-                    if (keyMatch) {
-                        const keyName = keyMatch[1];
-                        if (data.includes("pressed")) {
-                            root.handleKeyPress(keyName);
-                        } else if (data.includes("released")) {
-                            root.handleKeyRelease(keyName);
-                        }
-                    }
-                } else if (root.showMouseEvents && data.includes("POINTER_BUTTON")) {
-                    if (data.includes("pressed")) {
-                        const btnName = root.mouseButtonLabel(data);
-                        root.setKeyHeld(btnName, true);
-                        root.handleMouseClick(btnName);
-                    } else if (data.includes("released")) {
-                        root.setKeyHeld(root.mouseButtonLabel(data), false);
-                        root.endMouseDrag();
-                    }
-                } else if (root.showMouseEvents && data.includes("POINTER_SCROLL_")) {
-                    // Covers POINTER_SCROLL_WHEEL / _FINGER / _CONTINUOUS.
-                    root.handleScroll(data);
-                } else if (root.showMouseEvents && data.includes("POINTER_MOTION")
-                           && !data.includes("POINTER_MOTION_ABSOLUTE")) {
-                    root.handlePointerMotion(data);
-                } else if (root.showMouseEvents && data.includes("EV_REL")) {
+                // Parsing lives in core/inputParse.js: it is pure, and the
+                // wheel direction / motion pair / button labels are exactly the
+                // parts worth having under test. Mouse events are dropped here
+                // rather than in the parser, because "show mouse events" is a
+                // plugin setting, not a property of the input line.
+                const parsed = InputParse.event(data);
+                if (parsed === null) return;
+                switch (parsed.kind) {
+                case "key":
+                    if (parsed.pressed) root.handleKeyPress(parsed.name);
+                    else root.handleKeyRelease(parsed.name);
+                    break;
+                case "button":
+                    if (!root.showMouseEvents) return;
+                    // The press goes through handleMouseClick, which runs the
+                    // filter gate and then presses the button as a key, so a
+                    // rejected button never becomes "held".
+                    if (parsed.pressed) root.handleMouseClick(parsed.button);
+                    else root.endMouseDrag();
+                    break;
+                case "scroll":
+                    root.handleScroll(parsed.direction);
+                    break;
+                case "motion":
+                    if (root.showMouseEvents) root.accumulateDrag(parsed.dx, parsed.dy);
+                    break;
+                case "axis":
                     // Only reached in the evtest fallback; libinput reports
                     // motion and the wheel as POINTER_* lines instead.
-                    root.handleRelativeAxis(data);
+                    root.handleRelativeAxis(parsed.axis, parsed.value);
+                    break;
                 }
             }
         }
@@ -839,6 +719,14 @@ print(json.dumps(out))
     KeyvizOverlay {
         id: overlay
         daemon: root
+        // The overlay layer is shell-agnostic, so the two compositor facts it
+        // needs are resolved here, in the DMS-facing entry point:
+        //   focusedOutputName  which output holds the focused workspace ("" when
+        //                      the compositor cannot name one right now)
+        //   fallbackScreen     a screen to place the surface on before the first
+        //                      output is committed
+        focusedOutputName: root.focusedOutputName
+        fallbackScreen: CompositorService.getFocusedScreen()
         // Stay visible a moment longer so exit animations can play out
         visible: root.enabled && (overlay.isOverlayVisible || overlay.exitPending)
     }

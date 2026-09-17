@@ -4,22 +4,28 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const {loadCore, qtRgbaStub} = require('./helpers/load.cjs');
 
 // Run the production inline component in Qt Quick, without requiring a live
 // Wayland compositor or the DMS shell. StyledText supplies only font defaults.
 test('keycap geometry and alignment match Keyviz', () => {
   const root = path.resolve(__dirname, '..');
-  const source = fs.readFileSync(path.join(root, 'KeyvizOverlay.qml'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'ui', 'KeyvizOverlay.qml'), 'utf8');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'screenkey-qt-'));
   try {
-    for (const name of fs.readdirSync(root)) {
-      if (/\.(qml|js)$/.test(name)) fs.copyFileSync(path.join(root, name), path.join(temp, name));
-    }
+    // Mirror the runtime layout (ui/ + core/ + fonts/) instead of flattening:
+    // the components resolve each other through those relative imports.
+    fs.cpSync(path.join(root, 'ui'), path.join(temp, 'ui'), {recursive: true});
+    fs.cpSync(path.join(root, 'core'), path.join(temp, 'core'), {recursive: true});
     fs.cpSync(path.join(root, "fonts"), path.join(temp, "fonts"), {recursive: true});
-    fs.writeFileSync(path.join(temp, 'StyledText.qml'), 'import QtQuick\nText { font.family: "sans-serif"; font.weight: Font.Normal }\n');
+    // StyledText is a DMS widget; the harness supplies font defaults only, and
+    // every directory that uses it needs its own copy.
+    const shim = 'import QtQuick\nText { font.family: "sans-serif"; font.weight: Font.Normal }\n';
+    for (const dir of [temp, path.join(temp, 'ui')]) fs.writeFileSync(path.join(dir, 'StyledText.qml'), shim);
     fs.writeFileSync(path.join(temp, 'tst_keycap.qml'), `
 import QtQuick
 import QtTest
+import "ui"
 
 Item {
     id: overlayWindow
@@ -170,13 +176,38 @@ Item {
 
 // Neutral colors have a known OKLab result; alpha must survive conversion.
 test('Keyviz perceptual lightness preserves alpha and handles black', () => {
-  const vm = require('node:vm');
-  const context = vm.createContext({Qt: {rgba: (r, g, b, a) => ({r, g, b, a})}});
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'keycapColors.js'), 'utf8'), context, {filename:path.resolve(__dirname,'../keycapColors.js')});
+  const context = loadCore(['keycapColors.js'], qtRgbaStub);
   const gray = context.shiftLightness({r: 1, g: 1, b: 1, a: 0.5}, -0.1);
   assert.ok(Math.abs(gray.r - 0.869817) < 0.00001);
   assert.ok(Math.abs(gray.r - gray.g) < 0.00001);
   assert.equal(gray.a, 0.5);
   const liftedBlack = context.shiftLightness({r: 0, g: 0, b: 0, a: 1}, 0.2);
   assert.ok(liftedBlack.r > 0.08, 'unlike HSV scaling, lightening black is visible');
+});
+
+// keyviz's own group panel colour is #ffffff99: alpha LAST, which Qt would read
+// as #AARRGGBB and turn opaque. Both directions have to convert explicitly.
+test('CSS hex and components round-trip, alpha last', () => {
+  const context = loadCore(['keycapColors.js'], qtRgbaStub);
+  const panel = context.cssToRgba('#ffffff99');
+  assert.equal(panel.r, 1);
+  assert.equal(panel.a, 0x99 / 255);
+  assert.equal(context.toCss(panel.r, panel.g, panel.b, panel.a), '#ffffff99');
+  // Opaque values stay on the six-digit form keyviz writes.
+  const opaque = context.cssToRgba('#1a1a1a');
+  assert.equal(opaque.a, 1);
+  assert.equal(context.toCss(opaque.r, opaque.g, opaque.b, opaque.a), '#1a1a1a');
+  // Shorthand #rgba expands; anything else is not a hex colour.
+  // (Compared field by field: the object comes from a vm realm, so
+  // deepEqual sees a different prototype.)
+  const shorthand = context.cssToRgba('#f00f');
+  assert.equal(shorthand.r, 1);
+  assert.equal(shorthand.g, 0);
+  assert.equal(shorthand.b, 0);
+  assert.equal(shorthand.a, 1);
+  assert.equal(context.cssToRgba('rebeccapurple'), null);
+  assert.equal(context.cssToRgba(undefined), null);
+  // cssColor keeps the CSS reading (Qt.color would swap the alpha pair).
+  assert.equal(context.cssColor('#ffffff99').a, 0x99 / 255);
+  assert.equal(context.cssColor(42), 42, 'non-strings pass through untouched');
 });

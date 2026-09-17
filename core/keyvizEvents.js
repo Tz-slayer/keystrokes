@@ -93,6 +93,27 @@ function press(state, label, now, config) {
     };
 }
 
+// keyviz key_event.ts onMouseMove: once a held button starts a drag, the button
+// keycap is replaced by `Drag` rather than left to linger, so the key leaves
+// both `pressedKeys` and the last group. `release()` deliberately does neither
+// (a released key is kept until it expires), hence a separate action.
+function dropKey(state, label) {
+    const lastIndex = state.groups.length - 1;
+    const carried = state.groups.some(function(group, index) {
+        return index === lastIndex && group.keys.some(function(key) { return key.label === label; });
+    });
+    if (state.heldKeys.indexOf(label) === -1 && !carried) return state;
+    return {
+        heldKeys: state.heldKeys.filter(function(key) { return key !== label; }),
+        groups: state.groups.map(function(group, index) {
+            const keys = index === lastIndex
+                ? group.keys.filter(function(key) { return key.label !== label; }) : group.keys;
+            return keys.length === group.keys.length ? group : { uid: group.uid, keys: keys };
+        }).filter(function(group) { return group.keys.length > 0; }),
+        nextUid: state.nextUid
+    };
+}
+
 function release(state, label, now) {
     if (state.heldKeys.indexOf(label) === -1) return state;
     const lastIndex = state.groups.length - 1;

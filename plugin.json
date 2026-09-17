@@ -1,10 +1,10 @@
 {
-    "id": "keyviz",
-    "name": "Keyviz",
+    "id": "keystrokes",
+    "name": "Keystrokes",
     "icon": "keyboard",
-    "description": "Displays keystrokes on screen with keyviz-style animations, for tutorials",
+    "description": "Displays keystrokes and mouse actions on screen with keyviz-style animations, for screencasts and tutorials",
     "version": "1.2.0",
-    "author": "Loc Huynh",
+    "author": "hthienloc",
     "type": "composite",
     "capabilities": [
         "daemon",

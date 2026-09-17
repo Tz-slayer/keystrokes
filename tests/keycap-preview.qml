@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import ".."
+import "../ui"
 
 Rectangle {
     id: preview

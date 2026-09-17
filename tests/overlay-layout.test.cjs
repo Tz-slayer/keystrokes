@@ -1,15 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const {loadCore} = require('./helpers/load.cjs');
 
-const api = vm.createContext({});
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, '..', 'overlayLayout.js'), 'utf8'),
-  api,
-  { filename: path.join(__dirname, '..', 'overlayLayout.js') },
-);
+const api = loadCore(['overlayLayout.js']);
 
 const plain = value => JSON.parse(JSON.stringify(value));
 
@@ -37,6 +30,26 @@ test('explicit output pins, and @primary opts out of motion entirely', () => {
   assert.equal(api.screenName(api.primaryValue(), 'DP-1', names), 'DP-1');
   assert.equal(api.screenName(api.primaryValue(), '', names), 'DP-1');
   assert.equal(api.screenName(api.primaryValue(), 'DP-3', []), '');
+});
+
+test('an unnameable focus is reported as unknown instead of the first output', () => {
+  const names = ['DP-1', 'DP-2', 'DP-3'];
+  // CompositorService.getFocusedScreen() answers screens[0] whenever the
+  // compositor cannot name the focused output, which is indistinguishable from
+  // a real move to DP-1. A workspace switch can drop it for a moment; the
+  // overlay must hold its output instead of following that as a move.
+  assert.equal(api.focusedTarget(true, '', 'DP-2', names), 'DP-2');
+  assert.equal(api.focusedTarget(true, api.followFocusValue(), 'DP-2', names), 'DP-2');
+  assert.equal(api.focusedTarget(true, '', '', names), '', 'unknown focus: hold');
+  assert.equal(api.focusedTarget(true, '', 'gone', names), '', 'stale output: hold');
+  assert.equal(api.focusedTarget(true, '', 'DP-2', []), '');
+});
+
+test('a pinned output ignores the focus entirely', () => {
+  const names = ['DP-1', 'DP-2', 'DP-3'];
+  assert.equal(api.focusedTarget(false, 'DP-2', 'DP-3', names), 'DP-2');
+  assert.equal(api.focusedTarget(false, 'DP-2', '', names), 'DP-2', 'a pin never goes unknown');
+  assert.equal(api.focusedTarget(false, api.primaryValue(), 'DP-3', names), 'DP-1');
 });
 
 test('bottom history removal leaves the remaining group at the same absolute y', () => {

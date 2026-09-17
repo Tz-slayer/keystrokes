@@ -1,10 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
-const api = vm.createContext({});
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../keyvizEvents.js'), 'utf8'), api, {filename:path.resolve(__dirname,'../keyvizEvents.js')});
+const {loadCore} = require('./helpers/load.cjs');
+const api = loadCore(['keyvizEvents.js']);
 const config = { eventFilter: 'none', allowedKeys: ['Ctrl', 'Super', 'Alt'], showEventHistory: false, maxHistory: 5, fadeTimeout: 5000 };
 const plain = value => JSON.parse(JSON.stringify(value));
 const labels = state => plain(state.groups.map(group => group.keys.map(key => key.label)));
@@ -157,4 +154,63 @@ test('physical left and right modifiers retain independent pressed/released stat
   assert.equal(state.groups[0].keys.length,2);
   state=api.release(state,'KEY_LEFTCTRL',2);
   assert.deepEqual(plain(state.heldKeys),['KEY_RIGHTCTRL']);
+});
+
+// keyviz routes mouse buttons, the wheel and `Drag` through onKeyPress
+// (key_event.ts onMouseButtonPress / onMouseMove / onMouseWheel). Keeping them
+// out of the state machine minted a new history uid per event, which tore the
+// overlay row down and rebuilt it: Meta+wheel (a workspace switch) flickered,
+// and the row occasionally jumped while the old copy was still fading out.
+test('a wheel tick joins the group a held modifier started', () => {
+  const cfg = {...config,eventFilter:'modifiers'};
+  let state = api.press(api.initialState(), 'Super', 0, cfg);
+  const uid = state.groups[0].uid;
+  state = api.press(state, 'ScrollDown', 1, cfg);
+
+  assert.deepEqual(labels(state), [['Super', 'ScrollDown']]);
+  assert.equal(state.groups.length, 1, 'the wheel must not open a second row');
+  assert.equal(state.groups[0].uid, uid, 'a new uid destroys and rebuilds every keycap');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.animateIn)), [true, true]);
+
+  // The linger release must not move the key to another group either.
+  state = api.release(state, 'ScrollDown', 400);
+  assert.equal(state.groups[0].uid, uid);
+  assert.deepEqual(labels(state), [['Super', 'ScrollDown']]);
+});
+
+test('a mouse button joins the modifier group, and a drag replaces it', () => {
+  const cfg = {...config,eventFilter:'modifiers'};
+  let state = api.press(api.initialState(), 'Ctrl', 0, cfg);
+  const uid = state.groups[0].uid;
+  state = api.press(state, 'LMB Click', 1, cfg);
+  assert.deepEqual(labels(state), [['Ctrl', 'LMB Click']]);
+  assert.equal(state.groups[0].uid, uid, 'Ctrl+click must stay in the Ctrl group');
+
+  // keyviz drops the button from pressedKeys and the last group before pressing
+  // Drag, so the button keycap is replaced rather than left on screen.
+  state = api.dropKey(state, 'LMB Click');
+  assert.deepEqual(labels(state), [['Ctrl']]);
+  assert.deepEqual(plain(state.heldKeys), ['Ctrl']);
+  state = api.press(state, 'Drag', 2, cfg);
+  assert.deepEqual(labels(state), [['Ctrl', 'Drag']]);
+  assert.equal(state.groups[0].uid, uid);
+
+  assert.equal(api.dropKey(state, 'Unrelated'), state, 'an absent key must preserve state identity');
+});
+
+test('dropping the only key leaves no empty group behind', () => {
+  let state = api.press(api.initialState(), 'LMB Click', 0, {...config, eventFilter: 'none'});
+  state = api.dropKey(state, 'LMB Click');
+  assert.deepEqual(labels(state), []);
+  assert.deepEqual(plain(state.heldKeys), []);
+  // The next key starts a fresh group instead of resurrecting the dropped one.
+  state = api.press(state, 'A', 1, {...config, eventFilter: 'none'});
+  assert.deepEqual(labels(state), [['A']]);
+});
+
+test('releasing a key that was never held leaves the groups untouched', () => {
+  let state = api.press(api.initialState(), 'A', 0, {...config, eventFilter: 'none'});
+  const next = api.release(state, 'Drag', 1);
+  assert.equal(next, state);
+  assert.deepEqual(labels(next), [['A']]);
 });

@@ -1,6 +1,7 @@
 import QtQuick
-import "KeyIcons.js" as KeyIcons
-import "keycapColors.js" as KeycapColors
+import "../core/KeyIcons.js" as KeyIcons
+import "../core/keycapColors.js" as KeycapColors
+import "../core/keyvizMotion.js" as KeyvizMotion
 
 Item {
     id: keycap
@@ -9,10 +10,10 @@ Item {
     component PressAnimation: NumberAnimation {
         duration: 100
         easing.type: Easing.BezierSpline
-        easing.bezierCurve: [0.86, 0, 0.07, 1, 1, 1]
+        easing.bezierCurve: KeyvizMotion.pressCurve()
     }
 
-    FontLoader { id: keycapFont; source: "fonts/InterVariable.ttf" }
+    FontLoader { id: keycapFont; source: "../fonts/InterVariable.ttf" }
 
     property string label: ""
     // true while this key is still physically held down (keyviz isPressed)
@@ -66,7 +67,10 @@ Item {
         ? 0
         : (keycap.isPbt ? keycap.fs * 0.15 : (keycap.isLowProfile ? keycap.fs * 0.25 : 0))
 
-    readonly property var kd: KeyIcons.display(label)
+    // The host may inject the sink's mute state (see KeyvizDaemon); when it
+    // does not, `undefined` keeps the mute keycap on upstream's static
+    // crossed-speaker icon instead of guessing "unmuted".
+    readonly property var kd: KeyIcons.display(label, settings.systemMuted)
     readonly property bool hasIcon: kd.icon !== undefined
     readonly property bool isModifier: kd.category === "modifier"
     readonly property bool isNumpad: label.indexOf("Kp") === 0
@@ -155,67 +159,24 @@ Item {
     width: keycap.isMinimal ? minimalContent.implicitWidth : keycap.capW
     height: keycap.bodyH
 
-    // Hidden measurers. StyledText so the metrics match the drawn labels
-    // exactly; they are not inside a Row/Column, so they never affect layout.
-    Text {
-                font.family: keycapFont.name
-                font.weight: Font.Normal
-        id: measureSmall
+    // Hidden measurers for the content width: keyviz measures with the same
+    // font as the drawn labels. They sit outside any Row/Column, so they never
+    // take part in layout.
+    component Measurer: Text {
         visible: false
         wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs * 0.5
+        font.family: keycapFont.name
+        font.weight: Font.Normal
         font.capitalization: keycap.capsMode
+        font.pixelSize: keycap.fs
         text: keycap.displayLabel
     }
-    Text {
-                font.family: keycapFont.name
-                font.weight: Font.Normal
-        id: measurePlain
-        visible: false
-        wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs
-        font.capitalization: keycap.capsMode
-        text: keycap.displayLabel
-    }
-    Text {
-                font.family: keycapFont.name
-                font.weight: Font.Normal
-        id: measureSymbol
-        visible: false
-        wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs * 0.56
-        font.capitalization: keycap.capsMode
-        text: keycap.kd.symbol || ""
-    }
-    Text {
-                font.family: keycapFont.name
-        id: measureSub
-        visible: false
-        wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs * 0.56
-        font.weight: Font.DemiBold
-        font.capitalization: keycap.capsMode
-        text: keycap.displayLabel
-    }
-    Text {
-                font.family: keycapFont.name
-                font.weight: Font.Normal
-        id: measureHalf
-        visible: false
-        wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs * 0.5
-        font.capitalization: keycap.capsMode
-        text: keycap.displayLabel
-    }
-    Text {
-                font.family: keycapFont.name
-                font.weight: Font.Normal
-        id: measureSymbolHalf
-        visible: false
-        wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs * 0.5
-        text: keycap.kd.symbol || ""
-    }
+    Measurer { id: measureSmall; font.pixelSize: keycap.fs * 0.5 }
+    Measurer { id: measurePlain }
+    Measurer { id: measureSymbol; font.pixelSize: keycap.fs * 0.56; text: keycap.kd.symbol || "" }
+    Measurer { id: measureSub; font.pixelSize: keycap.fs * 0.56; font.weight: Font.DemiBold }
+    Measurer { id: measureHalf; font.pixelSize: keycap.fs * 0.5 }
+    Measurer { id: measureSymbolHalf; font.pixelSize: keycap.fs * 0.5; text: keycap.kd.symbol || "" }
 
     // minimal has no cap body to sink, so keyviz scales the whole keycap
     scale: (keycap.isMinimal && pressed) ? 0.95 : 1

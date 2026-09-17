@@ -1,20 +1,20 @@
 import QtQuick
-import QtQuick.Controls
 import Quickshell
 import qs.Common
 import qs.Modules.Plugins
 import qs.Services
 import qs.Widgets
-import "./dms-common"
-import "keyvizStyle.js" as KeyvizStyle
+import "dms/widgets"
+import "settings"
+import "core/keyvizStyle.js" as KeyvizStyle
 
     PluginSettings {
         id: root
 
-        pluginId: "keyviz"
+        pluginId: "keystrokes"
 
         // Daemon instance (for custom style list)
-        readonly property var daemon: PluginService.pluginInstances["keyviz"]
+        readonly property var daemon: PluginService.pluginInstances["keystrokes"]
 
         readonly property var styleOptions: {
             var opts = [
@@ -30,70 +30,9 @@ import "keyvizStyle.js" as KeyvizStyle
         }
 
 
-    // Keyboard devices scanned dynamically
-    property var deviceOptions: [{ label: "All Keyboards (Auto)", value: "all" }]
-
-    Component.onCompleted: {
-        scanDevices();
-        if (root.daemon)
-            root.daemon.scanStyles();
-    }
-
-    function scanDevices() {
-        const script = `
-import os, json, re
-
-include_pattern = "kanata"
-exclude_pattern = [
-    "power button", "video bus", "speaker", "headphone",
-    "lid switch", "touchpad", "extra buttons", "uinput",
-    "server", "hitune", "inphic", "instant", "webcam", "video"
-]
-
-devs = []
-if os.path.exists('/proc/bus/input/devices'):
-    with open('/proc/bus/input/devices') as f:
-        content = f.read()
-        
-    sections = content.strip().split('\\n\\n')
-    for section in sections:
-        name = ""
-        handlers = ""
-        for line in section.split('\\n'):
-            if line.startswith('N: Name='):
-                name = re.search(r'Name="([^"]+)"', line).group(1)
-            elif line.startswith('H: Handlers='):
-                handlers = line.split('=')[1]
-        
-        if name and handlers:
-            lower_name = name.lower()
-            is_included = include_pattern in lower_name
-            is_excluded = any(x in lower_name for x in exclude_pattern)
-            
-            # Check for kbd handler and filter out non-keyboards
-            if 'kbd' in handlers and (is_included or ('mouse' not in handlers and not is_excluded)):
-                # Find event path
-                event_match = re.search(r'event(\\d+)', handlers)
-                if event_match:
-                    event_path = "/dev/input/event" + event_match.group(1)
-                    devs.append((name + " (" + event_path.split('/')[-1] + ")", event_path))
-
-print(json.dumps(devs))
-`;
-        Proc.runCommand("keyviz.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
-            if (exitCode !== 0) return;
-            try {
-                const data = JSON.parse(stdout.trim());
-                var options = [{ label: "All Keyboards (Auto)", value: "all" }];
-                for (var i = 0; i < data.length; i++) {
-                    options.push({ label: data[i][0], value: data[i][1] });
-                }
-                root.deviceOptions = options;
-            } catch(e) {
-                console.warn("[Keyviz] Failed to parse device scanner output:", e);
-            }
-        });
-    }
+    // Device discovery lives in the daemon; only the "auto" entry is UI text.
+    readonly property var deviceChoices: [{ label: I18n.tr("All Keyboards (Auto)"), value: "all" }]
+        .concat(root.daemon ? root.daemon.deviceOptions : [])
 
     property bool refreshingControls: false
 
@@ -115,6 +54,14 @@ print(json.dumps(devs))
         return KeyvizStyle.exportStyle(data);
     }
 
+    // DankDropdown only speaks labels, so the palette name maps back to the
+    // index KeyvizStyle.palette() takes.
+    function paletteIndex(name) {
+        for (let i = 0; i < KeyvizStyle.COLOR_SCHEMES.length; i++)
+            if (KeyvizStyle.COLOR_SCHEMES[i].name === name) return i;
+        return 0;
+    }
+
     function applyValues(values) {
         Object.keys(values).forEach(key => root.saveValue(key, values[key]));
         root.refreshControls(root);
@@ -122,11 +69,23 @@ print(json.dumps(devs))
 
     SettingsCard {
         SectionTitle { text: I18n.tr("Keyviz Color Presets"); icon: "palette" }
-        ComboBox { id: paletteChoice; width: parent.width; model: KeyvizStyle.COLOR_SCHEMES.map(scheme => scheme.name) }
-        Row {
-            spacing: Theme.spacingS
-            DankButton { text: I18n.tr("Apply Palette"); onClicked: root.applyValues(KeyvizStyle.palette(paletteChoice.currentIndex)) }
-            DankButton { text: I18n.tr("Randomize Style"); onClicked: root.applyValues(KeyvizStyle.randomStyle(root.daemon ? root.daemon.pluginData : {})) }
+        KeyvizRow {
+            label: I18n.tr("Color Preset")
+            description: I18n.tr("Keyviz's 14 upstream palettes. Applying one overwrites the primary, secondary, label and border colors.")
+            DankDropdown {
+                id: paletteChoice
+                width: parent.width
+                options: KeyvizStyle.COLOR_SCHEMES.map(scheme => scheme.name)
+                currentValue: KeyvizStyle.COLOR_SCHEMES[0].name
+            }
+            Row {
+                spacing: Theme.spacingS
+                DankButton {
+                    text: I18n.tr("Apply Palette")
+                    onClicked: root.applyValues(KeyvizStyle.palette(root.paletteIndex(paletteChoice.currentValue)))
+                }
+                DankButton { text: I18n.tr("Randomize Style"); onClicked: root.applyValues(KeyvizStyle.randomStyle(root.daemon ? root.daemon.pluginData : {})) }
+            }
         }
     }
 
@@ -146,8 +105,6 @@ print(json.dumps(devs))
             defaultValue: true
         }
 
-        Separator {}
-
         KeyvizValueSetting {
             id: fadeTimeoutSetting
             settingKey: "fadeTimeout"
@@ -157,8 +114,6 @@ print(json.dumps(devs))
             maximum: 60000
             defaultValue: 5000
         }
-
-        Separator {}
 
         KeyvizValueSetting {
             id: fontSizeSetting
@@ -195,8 +150,6 @@ print(json.dumps(devs))
             defaultValue: "bottom_center"
         }
 
-        Separator {}
-
         SelectionSettingPlus {
             id: keycapStyleSetting
             settingKey: "keycapStyle"
@@ -214,8 +167,6 @@ print(json.dumps(devs))
             }
         }
 
-        Separator {}
-
         SelectionSettingPlus {
             id: animationTypeSetting
             settingKey: "animationType"
@@ -231,8 +182,6 @@ print(json.dumps(devs))
             defaultValue: "fade"
         }
 
-        Separator {}
-
         SliderSettingPlus {
             id: animationDurationSetting
             settingKey: "animationDuration"
@@ -245,8 +194,6 @@ print(json.dumps(devs))
             leftLabel: "50ms"
             rightLabel: "1000ms"
         }
-        Separator {}
-
     }
 
     SettingsCard {
@@ -270,8 +217,6 @@ print(json.dumps(devs))
             onValueChanged: if (isInitialized && !root.refreshingControls && value === "icon") { root.saveValue("showIcon", true); Qt.callLater(() => root.refreshControls(root)); }
         }
 
-        Separator {}
-
         SelectionSettingPlus {
             id: textCapsSetting
             settingKey: "textCaps"
@@ -283,8 +228,6 @@ print(json.dumps(devs))
             ]
             defaultValue: "capitalize"
         }
-
-        Separator {}
 
         SelectionSettingPlus {
             id: textAlignmentSetting
@@ -305,8 +248,6 @@ print(json.dumps(devs))
             defaultValue: "center"
         }
 
-        Separator {}
-
         ToggleSettingPlus {
             id: showIconSetting
             settingKey: "showIcon"
@@ -315,8 +256,6 @@ print(json.dumps(devs))
             defaultValue: true
         }
 
-        Separator {}
-
         ToggleSettingPlus {
             id: showSymbolSetting
             settingKey: "showSymbol"
@@ -324,8 +263,6 @@ print(json.dumps(devs))
             description: I18n.tr("Draw the secondary symbol (e.g. the shifted character) when a key has one")
             defaultValue: true
         }
-
-        Separator {}
 
         SelectionSettingPlus {
             id: iconAlignmentSetting
@@ -356,15 +293,10 @@ print(json.dumps(devs))
             defaultValue: true
         }
 
-        Separator {}
-
-        KeyvizValueSetting {
-            id: groupBackgroundColorSetting
-            kind: "color"
-            settingKey: "groupBackgroundCustom"
+        KeyvizColorRow {
             label: I18n.tr("Group Panel Color")
-            description: I18n.tr("CSS color: #RRGGBB or #RRGGBBAA; alpha is the final pair.")
-            defaultValue: "#ffffff99"
+            description: I18n.tr("keyviz draws a rounded panel behind every group. Its default is #ffffff99 (white at 60%); the picker's opacity slider sets the alpha.")
+            KeyvizColorSwatch { settingKey: "groupBackgroundCustom"; description: I18n.tr("Group panel"); defaultValue: "#ffffff99" }
         }
     }
 
@@ -374,8 +306,6 @@ print(json.dumps(devs))
             text: I18n.tr("Visibility Options")
             icon: "visibility"
         }
-        Separator {}
-
         ToggleSettingPlus {
             id: showMouseEventsSetting
             settingKey: "showMouseEvents"
@@ -383,8 +313,6 @@ print(json.dumps(devs))
             description: I18n.tr("Show mouse clicks, drags and wheel scrolling as keycaps")
             defaultValue: false
         }
-
-        Separator {}
 
         SliderSettingPlus {
             id: dragThresholdSetting
@@ -398,8 +326,6 @@ print(json.dumps(devs))
             leftLabel: "10"
             rightLabel: "200"
         }
-
-        Separator {}
 
         ToggleSettingPlus {
             id: showPressCountSetting
@@ -421,7 +347,7 @@ print(json.dumps(devs))
             id: selectedDevicePathSetting
             settingKey: "selectedDevicePath"
             label: I18n.tr("Keyboard Device")
-            options: root.deviceOptions
+            options: root.deviceChoices
             defaultValue: "all"
         }
     }
@@ -443,12 +369,12 @@ print(json.dumps(devs))
 
             Repeater {
                 model: [
-                    { text: "dms ipc keyviz toggle", label: I18n.tr("Toggle visualizer") },
-                    { text: "dms ipc keyviz enable", label: I18n.tr("Enable visualizer") },
-                    { text: "dms ipc keyviz disable", label: I18n.tr("Disable visualizer") },
-                    { text: "dms ipc keyviz test", label: I18n.tr("Preview a sample keystroke") },
-                    { text: "dms ipc keyviz styles", label: I18n.tr("List loaded custom styles") },
-                    { text: "dms ipc keyviz rescan", label: I18n.tr("Rescan the custom style folder") }
+                    { text: "dms ipc keystrokes toggle", label: I18n.tr("Toggle visualizer") },
+                    { text: "dms ipc keystrokes enable", label: I18n.tr("Enable visualizer") },
+                    { text: "dms ipc keystrokes disable", label: I18n.tr("Disable visualizer") },
+                    { text: "dms ipc keystrokes test", label: I18n.tr("Preview a sample keystroke") },
+                    { text: "dms ipc keystrokes styles", label: I18n.tr("List loaded custom styles") },
+                    { text: "dms ipc keystrokes rescan", label: I18n.tr("Rescan the custom style folder") }
                 ]
 
                 delegate: CopyBox {
@@ -480,37 +406,37 @@ print(json.dumps(devs))
 
     SettingsCard {
         SectionTitle { text: I18n.tr("Keyviz Style Import / Export"); icon: "import_export" }
-        StyledText {
-            width: parent.width
-            wrapMode: Text.WordWrap
-            text: I18n.tr("Paste Keyviz style JSON and apply it, or export the current style below. Mouse settings are not applied.")
-        }
-        ScrollView {
-            width: parent.width; height: 200
-            TextArea { id: styleJson; wrapMode: TextEdit.Wrap; selectByMouse: true; placeholderText: "{ ... }" }
-        }
-        Row {
-            spacing: Theme.spacingS
-            DankButton {
-                text: I18n.tr("Export JSON")
-                onClicked: { styleJson.text = JSON.stringify(root.currentStyle(), null, 2); styleStatus.text = I18n.tr("Select and copy the JSON above."); }
+        KeyvizRow {
+            label: I18n.tr("Style JSON")
+            description: I18n.tr("Paste Keyviz style JSON and apply it, or export the current style below. Mouse settings are not applied.")
+            KeyvizTextArea {
+                id: styleJson
+                width: parent.width
+                placeholderText: "{ ... }"
             }
-            DankButton {
-                text: I18n.tr("Apply JSON")
-                onClicked: {
-                    try {
-                        const values = KeyvizStyle.importStyle(JSON.parse(styleJson.text));
-                        Object.keys(values).forEach(key => root.saveValue(key, values[key]));
-                        root.refreshControls(root);
-                        styleStatus.text = I18n.tr("Style applied.");
-                    } catch (error) { styleStatus.text = error.message; }
+            Row {
+                spacing: Theme.spacingS
+                DankButton {
+                    text: I18n.tr("Export JSON")
+                    onClicked: { styleJson.text = JSON.stringify(root.currentStyle(), null, 2); styleStatus.text = I18n.tr("Select and copy the JSON above."); }
+                }
+                DankButton {
+                    text: I18n.tr("Apply JSON")
+                    onClicked: {
+                        try {
+                            const values = KeyvizStyle.importStyle(JSON.parse(styleJson.text));
+                            Object.keys(values).forEach(key => root.saveValue(key, values[key]));
+                            root.refreshControls(root);
+                            styleStatus.text = I18n.tr("Style applied.");
+                        } catch (error) { styleStatus.text = error.message; }
+                    }
                 }
             }
+            StyledText { id: styleStatus; width: parent.width; wrapMode: Text.WordWrap; color: Theme.surfaceVariantText }
         }
-        StyledText { id: styleStatus; width: parent.width; wrapMode: Text.WordWrap }
     }
 
     PluginAbout {
-        repoUrl: "https://github.com/loccun/dms-screenkey"
+        repoUrl: "https://github.com/hthienloc/dms-keystrokes"
     }
 }

@@ -1,14 +1,23 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import qs.Services
-import "keyvizStyle.js" as KeyvizStyle
-import "overlayLayout.js" as OverlayLayout
+import "../core/keyvizStyle.js" as KeyvizStyle
+import "../core/overlayLayout.js" as OverlayLayout
+import "../core/keyvizMotion.js" as KeyvizMotion
+import "../core/listModelSync.js" as ListModelSync
 
 // A transparent click-through stage. Only Keyviz's per-group backgrounds paint.
 PanelWindow {
     id: overlayWindow
     property var daemon: null
+    // ── host-provided screen inputs ──
+    // The compositor lookup lives in the host (the DMS daemon), not here: this
+    // file must run without DankMaterialShell, and the two facts the overlay
+    // actually needs are just "which output holds the focused workspace" and "a
+    // screen to fall back on before the first commit".
+    // "" means the host cannot name the focused output right now.
+    property string focusedOutputName: ""
+    property var fallbackScreen: null
     readonly property var config: daemon ? daemon.config : KeyvizStyle.settings({})
     readonly property real capFontSize: config.fontSize
     readonly property string animType: config.animationType
@@ -23,6 +32,10 @@ PanelWindow {
     readonly property bool showPressCount: config.showPressCount
     readonly property bool groupBackground: config.groupBackground
     readonly property color groupBackgroundColor: daemon ? daemon.groupBackgroundColor : "#99ffffff"
+    // Host-supplied audio state for the mute keycap's icon. Deliberately `var`:
+    // an absent host must stay `undefined` (which keeps the upstream static
+    // icon) rather than coerce to `false`, which would claim "unmuted".
+    readonly property var systemMuted: daemon ? daemon.systemMuted : undefined
     readonly property var styleParams: daemon ? daemon.styleParams : ({type: "lowprofile", cornerRadius: 0.5})
     readonly property bool isOverlayVisible: daemon && daemon.historyList.length > 0
     readonly property bool exitPending: groups.count > 0
@@ -30,64 +43,103 @@ PanelWindow {
     readonly property string alignment: config.position
 
     readonly property var availableScreenNames: Quickshell.screens.map(candidate => candidate.name)
-    readonly property var focusedScreen: CompositorService.getFocusedScreen()
     // Both "" (the default) and the explicit sentinel mean "the screen holding
     // the focused workspace". The value is an OUTPUT name, so switching
     // workspaces inside one output does not move the overlay.
     readonly property bool followsFocus: config.monitorName === ""
         || config.monitorName === OverlayLayout.followFocusValue()
-    readonly property string resolvedScreenName: OverlayLayout.screenName(
-        config.monitorName, focusedScreen ? focusedScreen.name : "", availableScreenNames)
+    // "" means "the compositor cannot name the focused output right now": hold
+    // the output we are already on instead of guessing. See the note on
+    // OverlayLayout.focusedTarget -- a workspace switch can drop the focused
+    // output for a moment, and a lookup that answers "the first screen" cannot
+    // be told apart from a real move to the first output.
+    readonly property string resolvedScreenName: OverlayLayout.focusedTarget(
+        followsFocus, config.monitorName, focusedOutputName, availableScreenNames)
     // Committing `resolvedScreenName` straight to `screen` makes the surface
-    // chase every transient focus flip: a workspace switch can briefly report
-    // another output before it settles, and each move reproduces the overlay
-    // (groups re-enter, which reads as a jump). Require the value to hold still.
-    property string targetScreenName: resolvedScreenName
+    // chase every transient focus flip: each move reproduces the overlay
+    // (every keycap re-enters, which reads as a refresh). Require the value to
+    // hold still for the whole interval, and never follow an unknown focus.
+    property string targetScreenName: ""
+
+    function commitScreen() {
+        if (!overlayWindow.resolvedScreenName) return;
+        if (overlayWindow.resolvedScreenName === overlayWindow.targetScreenName) return;
+        overlayWindow.targetScreenName = overlayWindow.resolvedScreenName;
+    }
+
     Timer {
         id: screenSettle
         interval: 250
         repeat: false
-        running: overlayWindow.followsFocus && overlayWindow.targetScreenName !== overlayWindow.resolvedScreenName
-        onTriggered: overlayWindow.targetScreenName = overlayWindow.resolvedScreenName
+        onTriggered: overlayWindow.commitScreen()
     }
+
+    onResolvedScreenNameChanged: {
+        // Unknown focus (a workspace switch in flight): keep the current output.
+        if (!overlayWindow.resolvedScreenName || overlayWindow.resolvedScreenName === overlayWindow.targetScreenName) {
+            screenSettle.stop();
+            return;
+        }
+        // First placement and a pinned output must land immediately.
+        if (!overlayWindow.targetScreenName || !overlayWindow.followsFocus) {
+            screenSettle.stop();
+            overlayWindow.commitScreen();
+            return;
+        }
+        // Any change re-arms the timer, so only a value that survives the whole
+        // interval is committed.
+        screenSettle.restart();
+    }
+
     onFollowsFocusChanged: {
-        if (!overlayWindow.followsFocus)
-            overlayWindow.targetScreenName = overlayWindow.resolvedScreenName;
+        if (!overlayWindow.followsFocus) {
+            screenSettle.stop();
+            overlayWindow.commitScreen();
+        }
     }
     screen: Quickshell.screens.find(candidate => candidate.name === targetScreenName)
-        ?? focusedScreen ?? Quickshell.screens[0]
+        ?? fallbackScreen ?? Quickshell.screens[0]
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.layer: WlrLayershell.Overlay
-    WlrLayershell.namespace: "dms:keyviz"
+    WlrLayershell.namespace: "dms:keystrokes"
     WlrLayershell.keyboardFocus: WlrLayershell.None
     WlrLayershell.exclusiveZone: -1
     exclusionMode: ExclusionMode.Ignore
     mask: Region {}
 
     function isKeyHeld(label) { return daemon && (daemon.keyboardState.heldKeys.includes(label) || daemon.heldKeys.includes(label)); }
+    // A re-created overlay window (a real output change, or a reload that
+    // leaves the daemon alive) must not replay entrance animations for keycaps
+    // that are already on screen. The daemon outlives the window, so it can
+    // tell a rebuild apart from a first run.
+    property bool firstPaint: true
+    property bool restoring: false
+
     ListModel { id: groups }
     function sync() {
-        const list = daemon ? daemon.historyList : [];
-        for (let i = groups.count - 1; i >= 0; i--) {
-            if (!list.some(entry => entry.uid === groups.get(i).uid)) {
-                if (!animDuration) groups.remove(i);
-                else groups.setProperty(i, "dying", true);
+        const restore = overlayWindow.firstPaint && daemon && daemon.overlayRendered;
+        overlayWindow.firstPaint = false;
+        if (daemon) daemon.overlayRendered = true;
+        overlayWindow.restoring = restore;
+        ListModelSync.reconcile(groups, daemon ? daemon.historyList : [], {
+            keyField: "uid",
+            keyOf: entry => entry.uid,
+            animate: animDuration > 0,
+            valueOf: entry => {
+                const source = entry.keys || (entry.isCombo ? entry.text.split(" + ") : [entry.text]).map(label => ({label, count: entry.count || 1}));
+                // Restored caps were already on screen before the rebuild: render
+                // them at rest instead of re-playing the entrance variant.
+                const keys = restore ? source.map(key => Object.assign({}, key, {animateIn: false})) : source;
+                return {uid: entry.uid, keyData: JSON.stringify(keys), dying: false};
             }
-        }
-        list.forEach(entry => {
-            const keys = entry.keys || (entry.isCombo ? entry.text.split(" + ") : [entry.text]).map(label => ({label, count: entry.count || 1}));
-            const value = {uid: entry.uid, keyData: JSON.stringify(keys), dying: false};
-            let found = -1;
-            for (let i = 0; i < groups.count; i++) if (groups.get(i).uid === entry.uid) {found = i; break;}
-            if (found < 0) groups.append(value);
-            else groups.set(found, value);
         });
+        overlayWindow.restoring = false;
     }
     function removeGroup(uid) {
-        for (let i = 0; i < groups.count; i++) if (groups.get(i).uid === uid && groups.get(i).dying) { groups.remove(i); return; }
+        ListModelSync.removeByKey(groups, "uid", uid);
     }
-    Component.onCompleted: sync()
+    Component.onCompleted: { commitScreen(); sync(); }
     Connections { target: overlayWindow.daemon; function onHistoryListChanged() { overlayWindow.sync(); } }
 
     Item {
@@ -150,6 +202,7 @@ PanelWindow {
                 required property string keyData
                 required dying
                 settings: overlayWindow
+                restored: overlayWindow.restoring
                 keys: JSON.parse(keyData)
                 latest: daemon && daemon.historyList.length > 0 && uid === daemon.historyList[daemon.historyList.length-1].uid
                 readonly property bool hasTarget: Object.prototype.hasOwnProperty.call(layout.groupTargets, String(uid))
@@ -161,13 +214,23 @@ PanelWindow {
                 onContentGeometryChanged: layout.requestGeometry()
                 // `entered` is still false during the synchronous first layout,
                 // so only subsequent history reflows animate.
+                // Reflow only: a moved group slides to its new position, while
+                // the first placement lands directly (see `entered`).
                 Behavior on x {
                     enabled: group.entered && !layout.suppressPositionAnimation
-                    NumberAnimation { duration: overlayWindow.animDuration / 3; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.23,1,0.32,1,1,1] }
+                    NumberAnimation {
+                        duration: KeyvizMotion.reflowDuration(overlayWindow.animDuration)
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: KeyvizMotion.enterCurve()
+                    }
                 }
                 Behavior on y {
                     enabled: group.entered && !layout.suppressPositionAnimation
-                    NumberAnimation { duration: overlayWindow.animDuration / 3; easing.type: Easing.BezierSpline; easing.bezierCurve: [0.23,1,0.32,1,1,1] }
+                    NumberAnimation {
+                        duration: KeyvizMotion.reflowDuration(overlayWindow.animDuration)
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: KeyvizMotion.enterCurve()
+                    }
                 }
                 onDyingChanged: if (dying) removal.restart()
                 Timer { id: removal; interval: overlayWindow.animDuration; onTriggered: overlayWindow.removeGroup(group.uid) }

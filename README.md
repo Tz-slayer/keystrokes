@@ -1,6 +1,10 @@
-# Keyviz
+# dms-keystrokes
 
-An always-on-top keystroke and mouse click visualizer for DankMaterialShell (DMS), suitable for screencasts, tutorials, and presentations. Based on [dms-screenkey](https://github.com/loccun/dms-screenkey), with animations ported from [mulaRahul/keyviz](https://github.com/mulaRahul/keyviz).
+An always-on-top keystroke and mouse click visualizer for DankMaterialShell (DMS), suitable for screencasts, tutorials, and presentations.
+
+It started as [dms-screenkey](https://github.com/loccun/dms-screenkey) and its keycap look,
+layout and animation presets are a port of [mulaRahul/keyviz](https://github.com/mulaRahul/keyviz) —
+see [Upstream](#upstream) for exactly what is taken from where.
 
 <img src="screenshot.png" width="400" alt="Screenshot">
 
@@ -8,11 +12,15 @@ An always-on-top keystroke and mouse click visualizer for DankMaterialShell (DMS
 
 Manually:
 ```bash
-git clone <this-repo> ~/.config/DankMaterialShell/plugins/keyviz
+git clone <this-repo> ~/.config/DankMaterialShell/plugins/keystrokes
 ```
 
 > [!NOTE]
-> This plugin is renamed from `screenkey` to `keyviz` and can be installed alongside the original.
+> Renamed: the plugin id changed from `keyviz` to `keystrokes` (the old name was the
+> upstream project's). The id is what DMS keys settings on, so after upgrading move
+> `~/.config/DankMaterialShell/plugin_settings.json`'s `keyviz` object to `keystrokes`, and
+> rename the install directory to `plugins/keystrokes`. IPC commands are now
+> `dms ipc keystrokes …`.
 
 ## Requirements
 
@@ -45,6 +53,16 @@ renderer limitations. Mouse behavior remains a separate, existing extension.
 
 The default **Focused Display (Auto)** output follows DMS's compositor-aware
 focused screen. Selecting a named display pins the overlay to that output.
+
+Switching workspaces must not disturb the overlay, so the output is only
+changed when the compositor can actually name the focused output and that name
+survives a 250 ms settle window. `CompositorService.getFocusedScreen()` cannot
+express "unknown": it answers `screens[0]` whenever the compositor has no
+focused output to report, which is indistinguishable from a real move to the
+first display, and a workspace switch can leave that gap. The overlay therefore
+reads the raw name itself and keeps its current output while it is unknown. If
+the window is re-created anyway (a genuine move to another display), the groups
+are restored at rest instead of replaying their entrance animation.
 
 ## Keycap Styles
 
@@ -100,22 +118,22 @@ Toggle the visualizer from the DMS Control Center:
 Control the visualizer daemon via terminal:
 ```bash
 # Toggle the visualizer
-dms ipc keyviz toggle
+dms ipc keystrokes toggle
 
 # Enable the visualizer
-dms ipc keyviz enable
+dms ipc keystrokes enable
 
 # Disable the visualizer
-dms ipc keyviz disable
+dms ipc keystrokes disable
 
 # List loaded custom keycap styles (JSON array of ids)
-dms ipc keyviz styles
+dms ipc keystrokes styles
 
 # Rescan ~/.config/DankMaterialShell/keyviz_styles/ for new style files
-dms ipc keyviz rescan
+dms ipc keystrokes rescan
 
 # Show a Ctrl + Shift + A sample through the keyboard state machine
-dms ipc keyviz test
+dms ipc keystrokes test
 ```
 
 ## Keyboard behavior and settings
@@ -125,6 +143,15 @@ stream is assembled. `Off` shows all keys. `Hotkeys` accepts sequences whose fir
 pressed key is Ctrl, Shift, Alt, Super or Fn. `Custom` tests that first key against
 `Allowed Keys` (comma-separated labels; `Comma` represents the comma key).
 Physical names such as `KEY_RIGHTCTRL` can restrict a custom filter to one side.
+Under `Hotkeys` a lone media key — mute included — is dropped, exactly as upstream
+keyviz drops it; switch to `Off` to see every key.
+
+The mute keycap is state-aware, a deliberate step beyond upstream: while the audio
+sink is muted it draws the crossed speaker, and after a press that unmutes it
+switches to sound waves. DMS's audio service supplies the state (the shell's mute
+keybind is `dms ipc call audio mute`), so the icon tracks reality for as long as
+the cap is on screen; a host that offers no audio state keeps upstream's static
+crossed speaker.
 
 A held key remains visible. Released keys expire individually after `Fade Timeout`
 (default 5000 ms), and repeated presses update that key's count. History retains
@@ -134,7 +161,7 @@ stays active while hidden so the shortcut can enable it again.
 
 The settings page accepts native Keyviz style JSON in **Style Import / Export**.
 Mouse data is preserved for roundtrip export but is not applied. You can also use
-`dms ipc call keyviz exportStyle` and `dms ipc call keyviz importStyle '<json>'`.
+`dms ipc call keystrokes exportStyle` and `dms ipc call keystrokes importStyle '<json>'`.
 Colors are CSS `#RRGGBB` or `#RRGGBBAA` (alpha last).
 
 Old `showNormalKeys`, `historyLimit`, and `marginSize` values migrate to the new
@@ -181,34 +208,116 @@ is reachable from `/dev/input` without any of this. A ripple anchored to the rea
 needs compositor cooperation (e.g. an IPC query or a `wl_pointer`-style global) that niri
 does not currently provide.
 
+Mouse buttons, `Drag` and the wheel go through the same key state machine as the keyboard,
+mirroring upstream: keyviz feeds them into `onKeyPress`/`onKeyRelease`, and the SCROLL_LINGER
+release is a normal key release. They therefore join the group a held modifier started —
+`Ctrl` + wheel is one `Ctrl + ScrollDown` row, not a second one. That matters beyond looks:
+a mouse event that opened its own row minted a fresh history uid, which destroyed and
+rebuilt every keycap in the overlay. `Mod`+wheel workspace switching in niri flickered for
+exactly that reason, and the row could visibly jump while the old copy faded out.
+
+## Project layout
+
+The runtime is split by dependency, not by feature, so the DMS coupling stays in one
+place: everything under `core/` and `ui/` is plain Qt Quick plus Quickshell, and only the
+three DMS entry points at the repository root may import `qs.*`.
+
+| path | what lives there | DMS-free? |
+|---|---|---|
+| `KeyvizDaemon.qml`, `KeyvizWidget.qml`, `KeyvizSettings.qml` | the plugin entry points named by `plugin.json` | no — DMS glue |
+| `core/` | event state machine, settings schema and migration, key labels, icon paths, colour maths, layout maths, input line parsing, the animation vocabulary (`keyvizMotion.js`) and the ListModel reconciliation both renderers share (`listModelSync.js`) | yes |
+| `ui/` | overlay window, group and keycap renderers | yes |
+| `settings/` | settings sections and the shared row shell (`KeyvizRow`), the value/JSON fields | no — DMS widgets |
+| `dms/widgets/` | vendored copies of the DMS widgets the pages build on | no — vendored |
+| `tests/helpers/` | the vm loader that runs `core/*.js` the way QML does | — |
+| `tests/`, `docs/`, `styles/`, `fonts/` | Node/Qt tests, parity records, style JSONs, bundled Inter | — |
+
+Three tests keep the boundaries honest:
+
+- `tests/layering.test.cjs` — `core/` and `ui/` must not reference `qs.*`, `Theme`,
+  `I18n`, `PluginService`, `StyledText` or the `Dank*` widgets.
+- `tests/settings-style.test.cjs` — the settings pages are built from the DMS-styled
+  rows (no stock `ComboBox`/`CheckBox`/`TextArea`, no dividers), and every row is labelled.
+- `tests/list-model-sync.test.cjs` — rows are updated in place, never re-created.
+
+### Settings UI style
+
+Every option is a row with the same chrome: label, an info icon whose tooltip carries the
+description, a reset affordance that appears once the value differs from its default, and
+a full-width control underneath. That is the shape of the vendored `*SettingPlus` widgets,
+and `settings/KeyvizRow.qml` reproduces it for controls those widgets do not cover (the
+palette dropdown that drives buttons, a local-only toggle, a multi-line field). When adding
+a setting, extend a row rather than dropping a control into a `SettingsCard`: a stock
+`ComboBox` next to a themed row is exactly the mismatch `tests/settings-style.test.cjs`
+rejects.
+
+Colour settings are circular swatches, not fields: the circle *is* the value, so a
+swatch costs very little width and related colours share one row — cap / base / label
+sit side by side under a single label ("Keycap Colors"), as do the modifier colours and
+the border colours. Clicking a swatch opens DMS's own colour picker, which carries an
+**opacity** slider — keyviz writes `#RRGGBBAA` and its default group panel is
+`#ffffff99`, so alpha has to survive the round trip; it is also why the circle sits on a
+checkerboard. The hex literal no longer takes space on the page: it is in the swatch's
+tooltip, and exact values still go through Style Import / Export. Swatches that differ
+from their default get a dot, and the row's reset resets all of them.
+`core/keycapColors.js` owns both directions of the CSS conversion (`cssToRgba`, `toCss`
+and `cssColor`): Qt's own parser cannot do it, because it reads an 8-digit hex as
+`#AARRGGBB`.
+
 ## Development
 
 The plugin is loaded from `~/.config/DankMaterialShell/plugins/<id>/`, so the usual
 setup is a symlink from there to your checkout.
 
-**`dms ipc plugins reload keyviz` recompiles `KeyvizDaemon.qml` only.** The overlay
-(`KeyvizOverlay.qml`) and the `.js` modules it imports (`KeyIcons.js`, `keycapColors.js`)
-are *siblings* of the daemon, not children, so a reload leaves them running from the
-previous compile. Editing the overlay and reloading therefore produces a **half-updated
+**`dms ipc plugins reload keyviz` recompiles `KeyvizDaemon.qml` only.** The overlay and the
+`.js` modules it pulls in live in `ui/` and `core/`, so a reload leaves them running from
+the previous compile. Editing the overlay and reloading therefore produces a **half-updated
 plugin**: the daemon is new, the rendering is old, and the change appears to have had no
 effect at all. This has already caused two false bug reports — the `+` separator "coming
 back" and "Show Symbols is not implemented".
 
 | you changed | what to run |
 |---|---|
-| `KeyvizDaemon.qml` | `dms ipc plugins reload keyviz` |
-| `KeyvizOverlay.qml`, `*.js`, `fonts/` | `dms restart` |
+| `KeyvizDaemon.qml` | `dms ipc plugins reload keystrokes` |
+| `ui/**`, `core/**`, `fonts/` | `dms restart` |
+| `settings/**`, `dms/widgets/**` | `dms restart` |
 | `plugin.json` | `dms restart` |
 
 To check whether what is running matches what is on disk, compare the file mtimes with the
 start time of the shell process:
 
 ```bash
-ls -l --time-style=+'%m-%d %H:%M' ~/.config/DankMaterialShell/plugins/keyviz/*.qml
+ls -l --time-style=+'%m-%d %H:%M' ~/.config/DankMaterialShell/plugins/keystrokes/**/*.qml
 ps -eo lstart,cmd | grep '[d]ms run'
 ```
 
 If a source file is newer than the shell process, the running plugin is stale.
+
+## Upstream
+
+This plugin would not exist without two projects, and the split matters when reading the
+code:
+
+- **[mulaRahul/keyviz](https://github.com/mulaRahul/keyviz)** (MIT) — the *design and
+  behaviour* this port follows. Keycap geometry, the four skins, animation presets, the
+  event grouping and filter rules, press counts and the native style JSON are all modeled
+  on keyviz's `src/` (see `docs/keycap-style-parity.md` for what is 1:1 and what is not).
+  Icon paths come from Lucide at the version keyviz pins.
+- **[loccun/dms-screenkey](https://github.com/loccun/dms-screenkey)** (MIT) — the *DMS
+  plugin* this repository grew out of: the manifest, the daemon/widget/settings split and
+  the input plumbing began there.
+
+Where the plugin deliberately departs from keyviz, the code says so (for example the
+mute keycap, whose icon follows the sink's mute state instead of always drawing the
+crossed speaker).
+
+Two names keep "keyviz" on purpose: the core modules (`keyvizStyle.js`,
+`keyvizEvents.js`, `keyvizMotion.js`) and the custom style folder
+`~/.config/DankMaterialShell/keyviz_styles/`, because both hold keyviz's own format.
+
+Two names keep "keyviz" on purpose: the core modules (`keyvizStyle.js`,
+`keyvizEvents.js`, `keyvizMotion.js`) and the custom style folder
+`~/.config/DankMaterialShell/keyviz_styles/`, because both hold keyviz's own format.
 
 ## License
 
@@ -245,10 +354,11 @@ MIT (see `LICENSE`).
 
 ### Keycap rendering verification
 
-Run `node --test tests/*.test.cjs` with Qt 6's `qmltestrunner`
-installed (or set `QML_TEST_RUNNER` to its path). The tests instantiate the actual
-keycap component offscreen and check skin heights, padding, modifier alignment,
-long PBT labels, surface painting, and perceptual color conversion.
+Run `npm test` (the same as `node --test tests/*.test.cjs`; the explicit glob matters,
+because a bare `tests/` argument is interpreted differently across Node versions) with
+Qt 6's `qmltestrunner` installed (or set `QML_TEST_RUNNER` to its path). The tests
+instantiate the actual keycap component offscreen and check skin heights, padding,
+modifier alignment, long PBT labels, surface painting, and perceptual color conversion.
 
 Keycap labels use the bundled Inter Variable font, matching Keyviz's font family.
 The font comes from [Inter](https://github.com/rsms/inter) and is distributed under

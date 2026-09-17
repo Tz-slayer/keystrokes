@@ -136,6 +136,8 @@ const DISPLAY = {
     "BRIGHTNESSDOWN": { label: "brightness down", shortLabel: "bright-", icon: "moon", category: "special" },
     "VOLUMEUP": { label: "volume up", shortLabel: "vol +", icon: "volume-2", category: "special" },
     "VOLUMEDOWN": { label: "volume down", shortLabel: "vol -", icon: "volume-2", category: "special" },
+    // These two are state-aware: display(label, muted) swaps the icon for
+    // volume-2 while the sink is unmuted (see isMuteKey / display below).
     "VOLUMEMUTE": { label: "mute", icon: "volume-x", category: "special" },
     "MUTE": { label: "mute", icon: "volume-x", category: "special" },
     "PLAYPAUSE": { label: "play / pause", shortLabel: "play", icon: "play", category: "special" },
@@ -163,9 +165,26 @@ function isMouseEvent(label) {
     return MOUSE_EVENTS.indexOf(label) !== -1;
 }
 
-function display(label) {
-    if (DISPLAY[label] !== undefined)
-        return DISPLAY[label];
+// The mute key is the one keycap whose icon describes the state the press
+// leaves behind rather than the key itself. Upstream keyviz always draws the
+// crossed speaker (keymaps.ts MuteIcon), which reads as a lie on the second
+// press -- the one that unmutes. When the host supplies the sink's mute state
+// the icon follows it (crossed while muted, sound waves while not); with no
+// state the rendering stays 1:1 with upstream, so callers that know nothing
+// about audio keep the parity look.
+const MUTE_KEYS = ["MUTE", "VOLUMEMUTE"];
+
+function isMuteKey(label) {
+    return MUTE_KEYS.indexOf(label) !== -1;
+}
+
+function display(label, muted) {
+    const entry = DISPLAY[label];
+    if (entry !== undefined) {
+        if (muted !== undefined && isMuteKey(label))
+            return Object.assign({}, entry, {icon: muted ? "volume-x" : "volume-2"});
+        return entry;
+    }
     if (/^F(?:[1-9]|1[0-2])$/.test(label))
         return { label: label, category: "function" };
     if (typeof label === "string" && label.length === 1 && /[a-zA-Z0-9]/.test(label))

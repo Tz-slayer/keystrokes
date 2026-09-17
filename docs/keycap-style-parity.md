@@ -24,25 +24,35 @@ Mouse 相关设置与指针定位不属于本次复刻范围。导入的 mouse �
 
 ## 结构
 
-- `keyvizStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
-- `keyvizEvents.js`：不可变按键状态、过滤、分组、计数和过期。
-- `KeyvizDaemon.qml`：Linux 输入、物理键身份、全局快捷键、插件持久化。
-- `KeyvizOverlay.qml`：透明点击穿透窗口、显示器与分组排列。
-- `KeyvizGroup.qml`：按身份保留键帽、独立进出动画、分组背景及圆角裁剪。
-- `Keycap.qml` / `KeycapSurface.qml`：字体、几何、按压反馈、边框与渐变阴影。
+目录按依赖划分（细节见 README 的 Project layout）：`core/` 与 `ui/` 不依赖 DMS。
+
+- `core/keyvizStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
+- `core/keyvizEvents.js`：不可变按键状态、过滤、分组、计数和过期。
+- `core/keyvizMotion.js`：缓动曲线与动画变体（fade/zoom/float/slide）的唯一描述。
+- `core/listModelSync.js`：历史行与键帽共用的 ListModel 对账（原地更新 + dying + 延时移除）。
+- `core/inputParse.js`：libinput/evtest 行解析（按键、按键位、滚轮方向、指针增量）。
+- `core/overlayLayout.js`：分组绝对定位与显示器解析。
+- `KeyvizDaemon.qml`（DMS 入口）：输入进程、设备扫描、物理键身份、全局快捷键、插件持久化；把焦点输出名注入 overlay。
+- `ui/KeyvizOverlay.qml`：透明点击穿透窗口、显示器与分组排列。
+- `ui/KeyvizGroup.qml`：按身份保留键帽、独立进出动画、分组背景及圆角裁剪。
+- `ui/Keycap.qml` / `ui/KeycapSurface.qml`：字体、几何、按压反馈、边框与渐变阴影。
 
 ## 验证
 
 ```sh
-node --test --experimental-test-coverage tests/*.test.cjs
-/usr/lib/qt6/bin/qmllint Keycap.qml KeyvizGroup.qml KeycapSurface.qml KeyIcon.qml
+node --test tests/*.test.cjs
+/usr/lib/qt6/bin/qmllint KeyvizDaemon.qml KeyvizSettings.qml ui/*.qml settings/*.qml core/*.js
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/keycap-preview.qml
 QT_QPA_PLATFORM=wayland QSG_RHI_BACKEND=opengl /usr/lib/qt6/bin/qmltestrunner -input tests/keycap-preview.qml
 ```
 
+`tests/layering.test.cjs` 保证 `core/` 与 `ui/` 不引入 DMS；`tests/keycap-regression.test.cjs`
+在临时目录里镜像 `ui/`+`core/`+`fonts/`，用真实 Qt Quick 渲染并断言几何。
+
 Node 套件还启动真实 Qt Quick 组件进行布局和绘制测试，不只是文本断言。
-JavaScript 覆盖率约 96%（不包含 QML）；QML 使用运行时断言与截图检查。
-预览生成 `/tmp/keyviz-parity-preview.png`。设置页在独立 Quickshell 环境中编译、实例化并导出 JSON。
+`core/` 各模块语句覆盖率 95–100%（`keyMapper.js` 89%、`keycapColors.js` 74% 为剩余缺口）；
+QML 使用运行时断言与截图检查。预览生成 `/tmp/keyviz-parity-preview.png`。
+设置页在独立 Quickshell 环境中编译、实例化并导出 JSON。
 
 ## 明确的边界
 

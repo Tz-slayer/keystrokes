@@ -2,12 +2,19 @@ import QtQuick
 import qs.Common
 import qs.Widgets
 
-// Direct-value settings: retain fractional numbers and CSS alpha-last colors.
-Item {
+// Settings whose value is a literal rather than a choice: keep Keyviz's
+// fractional numbers exactly as written, which is why this uses a plain field
+// instead of a slider or a role dropdown. Colours do not come through here --
+// they are swatches (see KeyvizColorSwatch).
+//
+// The row chrome (label, info tooltip, reset affordance, hover) comes from
+// KeyvizRow, so these rows look like the vendored `*SettingPlus` ones.
+KeyvizRow {
     id: root
+
+    // `label`, `description`, `isDirty`, `showReset` and the control slots are
+    // inherited from KeyvizRow (QML does not allow redeclaring them).
     required property string settingKey
-    required property string label
-    property string description: ""
     property string kind: "number"
     property var defaultValue: 0
     property real minimum: 0
@@ -16,7 +23,12 @@ Item {
     property var value: defaultValue
     property bool initialized: false
     property bool recording: false
+    property string error: ""
+
     focus: recording
+    isDirty: value !== defaultValue
+    onResetRequested: resetToDefault()
+
     Keys.onPressed: event => {
         if (!recording || event.isAutoRepeat) return;
         event.accepted = true;
@@ -41,11 +53,6 @@ Item {
         mods.push(label === "," ? "Comma" : label);
         field.text = mods.join(","); commit(); recording = false;
     }
-    property string error: ""
-    readonly property bool isDirty: value !== defaultValue
-    width: parent.width
-    implicitHeight: content.implicitHeight
-    opacity: enabled ? 1 : 0.5
 
     function settings() {
         let item = parent;
@@ -64,17 +71,13 @@ Item {
                     || (integerOnly && Math.floor(number) !== number)) return null;
             return number;
         }
-        if (kind === "color") {
-            return /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(input) ? input.toLowerCase() : null;
-        }
         if (input.length > 4096 || /[\x00-\x1f\x7f]/.test(input)) return null;
         return input.split(",").map(key => key.trim()).filter((key, index, keys) => key && keys.indexOf(key) === index).join(",");
     }
     function commit() {
         const next = normalized(field.text);
         if (next === null) {
-            error = kind === "color" ? I18n.tr("Use #RRGGBB or #RRGGBBAA (alpha last).")
-                : kind === "number" ? I18n.tr("Enter a valid number in the allowed range.")
+            error = kind === "number" ? I18n.tr("Enter a valid number in the allowed range.")
                 : I18n.tr("Use comma-separated key names without control characters.");
             return;
         }
@@ -98,57 +101,25 @@ Item {
     }
     Component.onCompleted: Qt.callLater(load)
 
-    Column {
-        id: content
+    DankTextField {
+        id: field
         width: parent.width
-        spacing: Theme.spacingXS
-        Row {
-            width: parent.width
-            spacing: Theme.spacingS
-            StyledText {
-                text: root.label
-                width: parent.width - reset.width - parent.spacing
-                font.pixelSize: Theme.fontSizeLarge
-                font.weight: Font.Medium
-                color: Theme.surfaceText
-                wrapMode: Text.WordWrap
-            }
-            DankButton {
-                id: reset
-                text: ""
-                iconName: "restart_alt"
-                width: 32
-                buttonHeight: 32
-                enabled: root.isDirty
-                onClicked: root.resetToDefault()
-            }
-        }
-        StyledText {
-            width: parent.width
-            visible: text !== ""
-            text: root.description
-            color: Theme.surfaceVariantText
-            font.pixelSize: Theme.fontSizeSmall
-            wrapMode: Text.WordWrap
-        }
-        DankTextField {
-            id: field
-            width: parent.width
-            onEditingFinished: root.commit()
-            onActiveFocusChanged: if (!activeFocus && root.initialized) root.commit()
-        }
-        DankButton {
-            visible: root.settingKey === "toggleShortcut"
-            text: root.recording ? I18n.tr("Press shortcut · Esc cancels") : I18n.tr("Record Shortcut")
-            onClicked: { root.recording = !root.recording; if (root.recording) root.forceActiveFocus(); }
-        }
-        StyledText {
-            width: parent.width
-            visible: root.error !== ""
-            text: root.error
-            color: Theme.error
-            font.pixelSize: Theme.fontSizeSmall
-            wrapMode: Text.WordWrap
-        }
+        onEditingFinished: root.commit()
+        onActiveFocusChanged: if (!activeFocus && root.initialized) root.commit()
+    }
+
+    StyledText {
+        width: parent.width
+        visible: root.error !== ""
+        text: root.error
+        color: Theme.error
+        font.pixelSize: Theme.fontSizeSmall
+        wrapMode: Text.WordWrap
+    }
+
+    DankButton {
+        visible: root.settingKey === "toggleShortcut"
+        text: root.recording ? I18n.tr("Press shortcut · Esc cancels") : I18n.tr("Record Shortcut")
+        onClicked: { root.recording = !root.recording; if (root.recording) root.forceActiveFocus(); }
     }
 }
