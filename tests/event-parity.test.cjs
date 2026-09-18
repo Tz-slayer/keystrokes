@@ -604,3 +604,104 @@ test('a modifier filter still admits a deferred modifier', () => {
   assert.deepEqual(labels(state), [['Ctrl', 'ScrollDown']]);
   assert.equal(state.groups.length, 1, 'the wheel must not open a second row');
 });
+
+// ── end to end: the raw input line through to the row ─────────────────────────
+//
+// Every test above feeds the state machine labels directly and runs on
+// `eventFilter: 'none'`, but the daemon does neither. It parses a libinput line,
+// maps the evdev code to a display label, and runs the default `modifiers`
+// filter -- so a regression could sit entirely in that chain and the suite
+// above would stay green.
+//
+// The two contexts below are load-bearing. `events.js` and `keyMapper.js` both
+// define a top-level `isModifier`, with different meanings: events' one takes a
+// display label ("Ctrl"), keyMapper's takes an evdev code ("KEY_LEFTCTRL").
+// Loading both into ONE vm context lets the second overwrite the first, and
+// `isModifier("Ctrl")` silently becomes false -- which disables the deferred
+// press entirely. That is a property of the test helper, not of QML: Daemon.qml
+// imports the two as separate namespaces (`as Events`, `as KeyMapper`), and a
+// namespace import does not leak into its sibling. Verified against quickshell:
+// two `.js` files each exporting `isModifier` keep their own. So the contexts
+// are kept apart here too, and the split is asserted below to keep a future
+// helper change from quietly re-merging them.
+{
+  // The state machine, alone -- exactly how QML scopes `Events`.
+  const machine = loadCore(['events.js']);
+  // Everything the daemon uses to turn a line into a label.
+  const parsing = loadCore(['inputParse.js', 'keyMapper.js']);
+
+  test('the test helper keeps events.js\' isModifier out of keyMapper\'s way', () => {
+    // A merged context would report false for "Ctrl" and the deferred press
+    // would never fire -- the exact shape of a bug that already cost one
+    // debugging round. Pin the separation rather than the mechanism.
+    assert.equal(machine.isModifier('Ctrl'), true,
+      'events.js judges display labels');
+    assert.equal(parsing.isModifier('KEY_LEFTCTRL'), true,
+      'keyMapper.js judges evdev codes');
+    assert.equal(parsing.isModifier('Ctrl'), false,
+      'the two must not be the same function');
+  });
+
+  // Daemon.displayKeyLabel, verbatim. The modifier names are hand-written there
+  // because keyMapper only knows the raw evdev spellings (KEY_LEFTCTRL ->
+  // "LEFTCTRL"), and the state machine has to see "Ctrl".
+  const displayKeyLabel = keyName => {
+    if (keyName === 'KEY_LEFTCTRL' || keyName === 'KEY_RIGHTCTRL') return 'Ctrl';
+    if (keyName === 'KEY_LEFTSHIFT' || keyName === 'KEY_RIGHTSHIFT') return 'Shift';
+    if (keyName === 'KEY_LEFTALT' || keyName === 'KEY_RIGHTALT') return 'Alt';
+    if (keyName === 'KEY_LEFTMETA' || keyName === 'KEY_RIGHTMETA') return 'Super';
+    return parsing.getDisplayKey(keyName);
+  };
+  // libinput >= 1.19 prints the KEYBOARD_KEY marker before the code.
+  const inputLine = (code, direction) =>
+    ` event3   KEYBOARD_KEY            +0.001s\t${code} (0) ${direction}`;
+  // The daemon's own config: the default filter, and the real label mapper.
+  const daemonConfig = {
+    showEventHistory: false, maxHistory: 5, fadeTimeout: 5000,
+    eventFilter: 'modifiers', allowedKeys: ['Ctrl', 'Super', 'Alt'],
+    displayLabel: displayKeyLabel,
+  };
+
+  // Feed raw lines exactly as Daemon's SplitParser does, and return the row.
+  function type(lines) {
+    let state = machine.initialState();
+    let now = 0;
+    for (const line of lines) {
+      now += 100;
+      const parsed = parsing.event(line);
+      assert.ok(parsed && parsed.kind === 'key', 'fixture line must parse: ' + line);
+      const label = displayKeyLabel(parsed.name);
+      state = parsed.pressed
+        ? machine.press(state, label, now, daemonConfig)
+        : machine.release(state, label, now);
+    }
+    return state;
+  }
+
+  const CTRL_DOWN = inputLine('KEY_LEFTCTRL', 'pressed');
+  const CTRL_UP = inputLine('KEY_LEFTCTRL', 'released');
+  const C_DOWN = inputLine('KEY_C', 'pressed');
+
+  test('the repeated-modifier bug is gone through the daemon\'s real input path', () => {
+    // The exact reported gesture: tap Ctrl a few times, then press Ctrl+C. The
+    // overlay must read Ctrl×1+C×1 -- one press each -- not Ctrl×4+C×1.
+    const state = type([
+      CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP,
+      CTRL_DOWN, C_DOWN,
+    ]);
+    const keys = plain(state.groups[state.groups.length - 1].keys);
+    assert.deepEqual(keys.map(key => key.label), ['Ctrl', 'C']);
+    assert.deepEqual(keys.map(key => key.count), [1, 1],
+      'the three taps were their own gesture and must not count into the chord');
+    assert.deepEqual(plain(state.heldKeys), ['Ctrl', 'C']);
+  });
+
+  test('a lone modifier still counts up through the daemon\'s real input path', () => {
+    // The complement: the deferral must not swallow the repeat. Three taps with
+    // nothing else down is Ctrl×3 on one row, and the modifier filter admits it.
+    const state = type([CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP]);
+    assert.equal(state.groups.length, 1);
+    assert.deepEqual(plain(state.groups[0].keys.map(key => key.label)), ['Ctrl']);
+    assert.equal(state.groups[0].keys[0].count, 3);
+  });
+}

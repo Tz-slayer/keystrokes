@@ -67,12 +67,51 @@ PluginComponent {
             } catch (error) { return "ERROR: " + error.message; }
         }
 
+        // Record what the input stream actually delivers, next to what the state
+        // machine made of it. `trace 20` records for twenty seconds, `trace 0`
+        // stops and returns the log.
+        //
+        // This exists because "the fix did nothing" has two very different
+        // causes that look identical from the overlay: the code never reloaded,
+        // or the input stream is not what the code assumes (the same physical
+        // key arriving from two event nodes, say). The log separates them --
+        // if the lines below never mention the keystroke you pressed, the
+        // daemon is running old code, and no amount of reading the source will
+        // show that.
+        function trace(seconds): string {
+            const secs = Number(seconds) || 0;
+            if (secs <= 0) {
+                traceTimer.stop();
+                const log = root.traceLog.slice();
+                root.traceLog = [];
+                return log.length ? log.join("\n") : "(no events captured)";
+            }
+            root.traceLog = ["# " + root.buildStamp];
+            root.traceLog.push("# enabled=" + root.enabled + " filter=" + root.config.eventFilter
+                + " history=" + root.config.showEventHistory + " tool=" + root.inputTool);
+            root.traceLog.push("# recording " + secs + "s -- press the keys now");
+            traceTimer.interval = secs * 1000;
+            traceTimer.restart();
+            return "RECORDING " + secs + "s";
+        }
     }
 
     readonly property var config: KeyStyle.settings(root.pluginData)
     property var keyboardState: Events.initialState()
     property var physicalKeys: []
     readonly property var eventConfig: Object.assign({}, config, {allowedKeys: parseKeys(config.allowedKeys), displayLabel: key => root.displayKeyLabel(key)})
+
+    // Diagnostics for `dms ipc keystrokes trace N`. See IpcHandler.trace.
+    property var traceLog: []
+    // Prints the revision this daemon loaded, so a log can say WHICH build the
+    // behaviour came from. That matters more than it sounds: a plugin edit does
+    // reach a running shell (Quickshell recompiles the changed file into
+    // ~/.cache/quickshell/qmlcache on the next load), but a stale compile is
+    // still possible -- a deleted plugin, a cache that outlived its source --
+    // and "the fix did nothing" then means two very different things. Bump this
+    // by hand whenever the event logic changes; it is the only build metadata
+    // QML gives us.
+    readonly property string buildStamp: "events.js rev b486dc9 (deferred modifier)"
 
     // Configurable settings
     // Every fallback below must equal the matching `defaultValue` in
@@ -414,6 +453,23 @@ print(json.dumps(devs))
         }
     }
 
+    Timer {
+        id: traceTimer
+        repeat: false
+        onTriggered: {
+            root.traceLog = root.traceLog.concat(["# recording finished"]);
+        }
+    }
+
+    // One `trace` line per event that reaches the state machine. It records the
+    // SOURCE spelling and the DISPLAY label side by side, because those two
+    // diverging is exactly how a key ends up in `heldKeys` under one name and
+    // in the row under another -- which shows up as a count that resets.
+    function traceRecord(line) {
+        if (traceTimer.running || root.traceLog.length > 0)
+            root.traceLog = root.traceLog.concat([line]);
+    }
+
     // keyviz: key_event.ts SCROLL_LINGER_MS = 300. The wheel has no press/release
     // of its own, so the "key" is considered released once it has been quiet for
     // this long; a later scroll then starts a fresh keycap instead of silently
@@ -486,13 +542,24 @@ print(json.dumps(devs))
         // The state machine is fed the *display* label, not the raw code: the
         // mouse, wheel and IPC paths all speak labels, so mixing the two left
         // `heldKeys` holding a code next to labels.
-        root.applyKeyboard(Events.press(root.keyboardState, label, Date.now(), root.eventConfig));
+        const next = Events.press(root.keyboardState, label, Date.now(), root.eventConfig);
+        root.traceRecord("down " + keyName + " -> " + label
+            + "  held=[" + next.heldKeys.join(",") + "]"
+            + "  row=[" + (next.groups.length ? next.groups[next.groups.length - 1].keys
+                .map(k => k.label + "x" + k.count).join("+") : "") + "]"
+            + (next === root.keyboardState ? "  (ignored: already held)" : ""));
+        root.applyKeyboard(next);
     }
 
     function handleKeyRelease(keyName) {
         root.physicalKeys = root.physicalKeys.filter(key => key !== keyName);
         const label = root.displayKeyLabel(keyName);
-        root.applyKeyboard(Events.release(root.keyboardState, label, Date.now()));
+        const next = Events.release(root.keyboardState, label, Date.now());
+        root.traceRecord("up   " + keyName + " -> " + label
+            + "  held=[" + next.heldKeys.join(",") + "]"
+            + "  row=[" + (next.groups.length ? next.groups[next.groups.length - 1].keys
+                .map(k => k.label + "x" + k.count).join("+") : "") + "]");
+        root.applyKeyboard(next);
     }
 
     Timer {
