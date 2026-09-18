@@ -8,17 +8,26 @@ const labels = state => plain(state.groups.map(group => group.keys.map(key => ke
 function down(state, key, now = 0, overrides = {}) { return api.press(state, key, now, { ...config, ...overrides }); }
 function freeze(value) { Object.values(value).forEach(item => { if (item && typeof item === 'object') freeze(item); }); return Object.freeze(value); }
 
-test('modifier and custom filters use the first physical key, including Shift/Fn', () => {
+// keyviz decides the gate from `pressedKeys[0]` alone. Here it asks whether the
+// sequence CONTAINS a modifier instead, because when two keys land in the same
+// millisecond the kernel picks which one is "first" and the identical gesture
+// would otherwise be shown or discarded on that coin flip.
+test('a modifier filter shows a sequence once any of its keys is a modifier', () => {
+  // A lone modifier always shows, whatever the filter.
   for (const label of ['Ctrl', 'Shift', 'Alt', 'Super', 'Fn']) {
     assert.deepEqual(labels(down(api.initialState(), label, 0, {eventFilter:'modifiers'})), [[label]]);
   }
-  let state = down(api.initialState(), 'A', 0, {eventFilter:'modifiers'});
-  state = down(state, 'Ctrl', 1, {eventFilter:'modifiers'});
-  assert.deepEqual(labels(state), []);
-  assert.deepEqual(plain(state.heldKeys), ['A', 'Ctrl']);
-  state = down(api.initialState(), 'Space', 0, {eventFilter:'custom', allowedKeys:['Space']});
-  state = down(state, 'B', 1, {eventFilter:'custom', allowedKeys:['Space']});
-  assert.deepEqual(labels(state), [['Space', 'B']]);
+  // Ctrl+C and C+Ctrl are the same gesture and must both show, with each key
+  // carrying its own count. The order they arrive in is a race, not a decision.
+  assert.deepEqual(labels(api.press(down(api.initialState(), 'Ctrl', 0, {eventFilter:'modifiers'}),
+                                    'C', 1, {eventFilter:'modifiers'})), [['Ctrl', 'C']]);
+  assert.deepEqual(labels(down(down(api.initialState(), 'C', 0, {eventFilter:'modifiers'}),
+                               'Ctrl', 1, {eventFilter:'modifiers'})), [['C', 'Ctrl']],
+    'the modifier arriving second is still a hotkey');
+  // Two keys with no modifier in sight are still not a hotkey.
+  assert.deepEqual(labels(down(down(api.initialState(), 'A', 0, {eventFilter:'modifiers'}),
+                               'B', 1, {eventFilter:'modifiers'})), []);
+  // A lone non-modifier is not one either.
   assert.deepEqual(labels(down(api.initialState(), 'Caps Lock', 0, {eventFilter:'modifiers'})), []);
 });
 
@@ -195,21 +204,30 @@ test('replace mode: a single key repeat still increments with another key held',
 });
 
 // The identity a keycap is matched by must be the *displayed* label, because
-// `heldKeys` and the daemon's `physicalKeys` carry raw evdev codes on the
-// keyboard path while the mouse/wheel/IPC paths carry labels. Comparing the two
-// literally turned the same physical key into two keycaps: the repeat missed the
-// keycap it was meant to bump and appended a duplicate beside it.
+// callers spell one key two ways: the keyboard path presses a raw evdev code
+// ("KEY_LEFTCTRL") while the mouse, wheel and IPC paths press the rendered
+// label ("Ctrl"). Comparing the two literally turned one physical key into two
+// keycaps, because the repeat missed the keycap it was meant to bump.
 test('a code and a label naming the same key are one keycap, not two', () => {
   const map = {KEY_LEFTCTRL: 'Ctrl', KEY_C: 'C'};
   const mixed = { ...config, showEventHistory: true, displayLabel: key => map[key] || key };
 
-  let state = down(api.initialState(), 'KEY_LEFTCTRL', 0, mixed);
-  state = down(state, 'Ctrl', 1, mixed);
-
+  // The same physical key, spelled both ways. It is *held*, so the second press
+  // is hardware autorepeat and must not add anything. Before the identity fix
+  // the two spellings looked like two different keys: the row showed both, and
+  // the guard could not tell a repeat from a fresh press.
+  const state = down(down(api.initialState(), 'KEY_LEFTCTRL', 0, mixed), 'Ctrl', 1, mixed);
   assert.deepEqual(plain(state.groups[0].keys.map(key => map[key.label] || key.label)), ['Ctrl'],
     'the same key must not appear twice');
-  assert.equal(state.groups[0].keys.length, 1, 'the second press repeats the first keycap');
-  assert.equal(state.groups[0].keys[0].count, 2, 'and its count reflects the repeat');
+  assert.equal(state.groups[0].keys.length, 1, 'the autorepeat guard sees one key, not two');
+  assert.equal(state.groups[0].keys[0].count, 1, 'a held key cannot increment');
+
+  // Release, then press it again spelled the other way: now it is a real
+  // repeat, and it has to land on the keycap it names rather than beside it.
+  const repeated = down(api.release(state, 'Ctrl', 2), 'KEY_LEFTCTRL', 3, mixed);
+  assert.deepEqual(plain(repeated.groups[0].keys.map(key => map[key.label] || key.label)), ['Ctrl']);
+  assert.equal(repeated.groups[0].keys.length, 1, 'the repeat must not append a duplicate keycap');
+  assert.equal(repeated.groups[0].keys[0].count, 2, 'and its count reflects the repeat');
 });
 
 test('a repeat is recognised whether the caller passes a code or a label', () => {
@@ -222,14 +240,16 @@ test('a repeat is recognised whether the caller passes a code or a label', () =>
   const overlay = state => plain(state.groups[0].keys.map(key => map[key.label] || key.label));
   const counts = state => plain(state.groups[0].keys.map(key => key.count));
 
-  // Raw code first, then the rendered label: one keycap, count 2.
-  const mixed = down(down(api.initialState(), 'KEY_LEFTCTRL', 0, spelled), 'Ctrl', 1, spelled);
+  // Press by code, release, press again by label: one keycap, count 2.
+  const byCode = api.press(api.initialState(), 'KEY_LEFTCTRL', 0, spelled);
+  const mixed = down(api.release(byCode, 'Ctrl', 1), 'Ctrl', 2, spelled);
   assert.deepEqual(overlay(mixed), ['Ctrl'], 'the two spellings are one keycap');
   assert.equal(mixed.groups[0].keys.length, 1, 'the repeat must not append a duplicate keycap');
   assert.deepEqual(counts(mixed), [2], 'the repeat lands on the keycap it names');
 
-  // Label first, then the raw code: same result, so neither direction is special.
-  const reversed = down(down(api.initialState(), 'Ctrl', 0, spelled), 'KEY_LEFTCTRL', 1, spelled);
+  // The other direction: press by label, release, press again by code.
+  const byLabel = api.press(api.initialState(), 'Ctrl', 0, spelled);
+  const reversed = down(api.release(byLabel, 'Ctrl', 1), 'KEY_LEFTCTRL', 2, spelled);
   assert.deepEqual(overlay(reversed), ['Ctrl']);
   assert.deepEqual(counts(reversed), [2]);
 });
@@ -283,11 +303,11 @@ test('unknown releases and unchanged ticks preserve state identity', () => {
   assert.equal(api.tick(state, 99999, config), state);
 });
 
-// keyviz key_event.ts `ignoreEvent`. Both of its branches test pressedKeys[0],
-// so the rule is one predicate over the FIRST physically pressed key. These
-// cases mirror upstream's behaviour, including the ones that surprise people:
-// a lone modifier is shown, Shift counts, and press order decides.
-test('the filter gate is decided by the first physically pressed key', () => {
+// The gate. It asks whether the sequence CONTAINS a modifier rather than
+// whether the first key is one, because "first" is a race between two keys
+// pressed together -- the same gesture must not depend on which one the kernel
+// happened to report first.
+test('the filter gate accepts a sequence containing any modifier', () => {
   const show = (filter, held, allowed) => api.shouldShow(filter, held, allowed);
 
   // "none" shows everything.
@@ -302,21 +322,22 @@ test('the filter gate is decided by the first physically pressed key', () => {
   for (const key of ['A', '1', 'Enter', 'F5'])
     assert.equal(show('modifiers', [key]), false, `${key} alone must be hidden`);
 
-  // Combinations are gated by the first pressed key, so order matters.
+  // Order no longer decides: both spellings of the same chord are hotkeys.
   assert.equal(show('modifiers', ['Ctrl', 'A']), true);
+  assert.equal(show('modifiers', ['A', 'Ctrl']), true, 'the modifier need not be first');
   assert.equal(show('modifiers', ['Shift', 'A']), true, 'Shift is a modifier');
+  assert.equal(show('modifiers', ['A', 'Shift']), true);
   assert.equal(show('modifiers', ['Ctrl', 'Shift', 'A']), true);
-  assert.equal(show('modifiers', ['A', 'Ctrl']), false, 'A was pressed first');
-  assert.equal(show('modifiers', ['A', 'Shift']), false);
 
-  // A modifier that arrives late still belongs to the group once the gate is open.
-  assert.equal(show('modifiers', ['Ctrl', 'A', 'Shift']), true);
+  // No modifier anywhere in the sequence: still not a hotkey.
+  assert.equal(show('modifiers', ['A', 'B']), false);
 
-  // "custom" swaps the modifier set for allowedKeys.
+  // "custom" swaps the modifier set for allowedKeys, same containment rule.
   assert.equal(show('custom', ['Space'], ['Space']), true);
   assert.equal(show('custom', ['A'], ['Space']), false);
   assert.equal(show('custom', ['Space', 'B'], ['Space']), true);
-  assert.equal(show('custom', ['B', 'Space'], ['Space']), false);
+  assert.equal(show('custom', ['B', 'Space'], ['Space']), true, 'allowed key need not be first');
+  assert.equal(show('custom', ['B', 'C'], ['Space']), false);
   assert.equal(show('custom', ['Ctrl'], []), false);
 });
 
@@ -326,18 +347,44 @@ test('the gate tolerates an empty or absent filter', () => {
   assert.equal(api.shouldShow('modifiers', []), true);
 });
 
+// The gate has to look at the keys already held, not just the new one: it runs
+// on press, so when Ctrl arrives second the key that beat it is already in
+// `heldKeys` and must not veto the chord -- and it must not be left stranded
+// there either, or it would never reach the screen.
+test('a helper key already held does not veto a late modifier', () => {
+  const cfg = { eventFilter: 'modifiers', allowedKeys: [], showEventHistory: false, maxHistory: 5, fadeTimeout: 5000 };
+
+  // C alone is rejected by the filter, so nothing is on screen yet.
+  let state = api.press(api.initialState(), 'C', 0, cfg);
+  assert.deepEqual(labels(state), [], 'a lone C is not a hotkey');
+  assert.deepEqual(plain(state.heldKeys), ['C'], 'but it is remembered as held');
+
+  // Ctrl lands: the whole chord is now a hotkey, and C comes back with it.
+  state = api.press(state, 'Ctrl', 1, cfg);
+  assert.deepEqual(labels(state), [['C', 'Ctrl']], 'the late modifier opens the chord');
+  assert.equal(state.groups.length, 1, 'the chord is one row, not two');
+
+  // And the normal order still lands in a single group.
+  let other = api.press(api.initialState(), 'Ctrl', 0, cfg);
+  const uid = other.groups[0].uid;
+  other = api.press(other, 'C', 1, cfg);
+  assert.deepEqual(labels(other), [['Ctrl', 'C']]);
+  assert.equal(other.groups[0].uid, uid, 'no second row for the same chord');
+});
+
 // The gate resolves a key's identity through displayLabel, so press() compares
-// identities too. keyviz renders both Ctrl keys as "Ctrl", so a left/right
-// press pair is one keycap with count 2 -- not two keycaps. Physical tracking
-// stays per-code: releasing the left one leaves the right one held.
+// identities too. keyviz renders both Ctrl keys as "Ctrl", so the two physical
+// keys share one keycap: the second press is a repeat on screen, and the
+// autorepeat guard treats it as the same key rather than a second one.
 test('physical left and right modifiers render as one keycap but track independently', () => {
   const cfg = {...config,eventFilter:'modifiers',displayLabel:key=>key.startsWith('KEY_')&&key.endsWith('CTRL')?'Ctrl':key};
   let state=api.press(api.initialState(),'KEY_LEFTCTRL',0,cfg);
   state=api.press(state,'KEY_RIGHTCTRL',1,cfg);
   assert.deepEqual(labels(state),[['Ctrl']],'both Ctrl keys render as the same keycap');
-  assert.equal(state.groups[0].keys[0].count,2,'the second physical press is a repeat on screen');
+  assert.equal(state.groups[0].keys.length,1,'one keycap, not two');
+  assert.equal(state.groups[0].keys[0].count,1,'the second is autorepeat while the first is held');
   state=api.release(state,'KEY_LEFTCTRL',2);
-  assert.deepEqual(plain(state.heldKeys),['KEY_RIGHTCTRL']);
+  assert.deepEqual(plain(state.heldKeys),['Ctrl'],'the keycap stays held -- the right Ctrl is still down');
 });
 
 // keyviz routes mouse buttons, the wheel and `Drag` through onKeyPress

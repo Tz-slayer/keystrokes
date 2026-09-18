@@ -94,9 +94,10 @@ PluginComponent {
     // clicks, drags and the wheel straight into `onKeyPress` and lets
     // `ignoreEvent` decide them with everything else. So a bare click or wheel
     // tick is dropped by the default "modifiers" filter, while Ctrl+click and
-    // Ctrl+wheel are shown -- and, as for keys, the decision belongs to the
-    // first key held. The label is appended when it is not on `heldKeys` yet,
-    // mirroring upstream's push-then-test order.
+    // Ctrl+wheel are shown. The gate asks whether any key of the sequence is a
+    // modifier, so it does not depend on which one was pressed first. The label
+    // is appended when it is not on `heldKeys` yet, mirroring upstream's
+    // push-then-test order.
     function eventAllowed(label) {
         const held = root.heldKeys.indexOf(label) !== -1
             ? root.heldKeys : root.heldKeys.concat([label]);
@@ -428,14 +429,13 @@ print(json.dumps(devs))
         }
     }
 
-    // keyviz's trigger rule. `heldKeys` is maintained in physical press order by
-    // the state machine and already contains the key being handled, which is
-    // exactly what the rule needs:
+    // keyviz's trigger rule, relaxed: `heldKeys` is maintained in physical press
+    // order by the state machine and already contains the key being handled, but
+    // order is no longer what decides the outcome.
     //   - a lone modifier passes, because it *is* a modifier
-    //   - Ctrl-then-A passes, because the first pressed key is a modifier
-    //   - A-then-Ctrl does NOT, because A was pressed first
+    //   - Ctrl-then-A and A-then-Ctrl both pass: the sequence contains a modifier
     //   - Shift counts, so Shift+A is a shortcut
-    // See events.shouldShow for the upstream derivation.
+    // See events.isAllowedSequence for the reasoning.
     function parseKeys(value) {
         return String(value || "").split(",").map(k => k.trim()).filter(k => k !== "")
             .map(k => k === "Comma" ? "," : k);
@@ -460,8 +460,20 @@ print(json.dumps(devs))
     }
 
     function handleKeyPress(keyName) {
-        if (root.physicalKeys.includes(keyName)) return;
-        root.physicalKeys = root.physicalKeys.concat([keyName]);
+        // `physicalKeys` tracks raw evdev codes purely so the toggle shortcut
+        // can be recognised by physical key. It must NOT gate the key press:
+        // it is only ever cleared by a matching release line, so one lost or
+        // unparsed release left the code stuck here and silently swallowed
+        // every later press of that key -- which reads as "I pressed two keys
+        // together and only one showed up".
+        //
+        // Repeats are already filtered where they belong, in `Events.press`,
+        // which returns the state untouched while the key is held. That check
+        // runs on the display label, so it also covers the mouse and wheel
+        // paths, and it self-heals instead of depending on a release arriving.
+        root.physicalKeys = root.physicalKeys.includes(keyName)
+            ? root.physicalKeys
+            : root.physicalKeys.concat([keyName]);
         const label = root.displayKeyLabel(keyName);
         const labels = root.physicalKeys.map(root.displayKeyLabel);
         const shortcut = root.parseKeys(config.toggleShortcut);
@@ -473,8 +485,7 @@ print(json.dumps(devs))
         if (!root.enabled || !label) return;
         // The state machine is fed the *display* label, not the raw code: the
         // mouse, wheel and IPC paths all speak labels, so mixing the two left
-        // `heldKeys` holding a code next to labels. `physicalKeys` keeps the raw
-        // code, which is what the per-code repeat/toggle checks above need.
+        // `heldKeys` holding a code next to labels.
         root.applyKeyboard(Events.press(root.keyboardState, label, Date.now(), root.eventConfig));
     }
 

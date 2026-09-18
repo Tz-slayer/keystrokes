@@ -15,20 +15,34 @@ function isModifier(label) {
 
 // keyviz key_event.ts `ignoreEvent` (key_event.ts:217-230), inverted.
 //
-// Both of upstream's branches test `pressedKeys[0]` -- for a single key,
-// `event.name` *is* `pressedKeys[0]` -- so the whole rule collapses to one
-// predicate over the FIRST PHYSICALLY PRESSED key. That is what makes a lone
-// modifier appear ("modifiers" mode keeps any key that is itself a modifier)
-// and what makes press order matter: Ctrl-then-A is shown, A-then-Ctrl is not,
-// because A is not a modifier even though Ctrl is held by the time it lands.
+// Upstream decides this from `pressedKeys[0]` ALONE -- the first key of the
+// sequence. That is fine when a human rolls Ctrl and then C a comfortable
+// moment apart, and it is why "A then Ctrl" is not treated as a hotkey. It
+// falls apart the moment both keys land in the same millisecond: which one the
+// kernel reports first is then a race, so the identical gesture is shown or
+// discarded depending on the winner. From the outside that looks like "two keys
+// pressed together, only one is recognised", or like a timing threshold that is
+// too strict -- there is no threshold involved at all.
 //
-// `heldLabels` must already contain the key being tested, in press order.
-function shouldShow(filter, heldLabels, allowedKeys) {
+// So the gate here asks whether the SEQUENCE contains a modifier, not whether
+// the first key is one. `Ctrl+C` and `C+Ctrl` then both show, and every key of
+// the pair keeps its own press count, which is what the overlay should do while
+// two keys are held together.
+//
+// `previousLabels` is what the group already holds, because the gate runs on
+// press: when a modifier arrives second, the key that beat it is already in the
+// group, and a helper key like C must not veto the chord it belongs to.
+function isAllowedSequence(labels, previousLabels, filter, allowedKeys) {
     if (!filter || filter === "none") return true;
-    if (!heldLabels || heldLabels.length === 0) return true;
-    const first = heldLabels[0];
+    if (!labels || labels.length === 0) return true;
     const set = filter === "modifiers" ? MODIFIER_LABELS : (allowedKeys || []);
-    return set.indexOf(first) !== -1;
+    return labels.concat(previousLabels || []).some(function(label) {
+        return set.indexOf(label) !== -1;
+    });
+}
+
+function shouldShow(filter, heldLabels, allowedKeys) {
+    return isAllowedSequence(heldLabels, null, filter, allowedKeys);
 }
 
 function newKey(label, now, animateIn) {
@@ -45,15 +59,6 @@ function carryKey(key) {
 }
 
 function press(state, label, now, config) {
-    // The upstream native listener discards hardware autorepeat before grouping.
-    if (state.heldKeys.indexOf(label) !== -1) return state;
-    const heldKeys = state.heldKeys.concat([label]);
-    const first = config.displayLabel ? config.displayLabel(heldKeys[0]) : heldKeys[0];
-    const ignored = config.eventFilter === "modifiers" ? !isModifier(first)
-        : config.eventFilter === "custom" ? (config.allowedKeys || []).indexOf(first) === -1 && (config.allowedKeys || []).indexOf(heldKeys[0]) === -1 : false;
-    if (ignored) return { heldKeys: heldKeys, groups: state.groups, nextUid: state.nextUid };
-
-    const last = state.groups[state.groups.length - 1];
     // A key is identified by the label it *displays*, never by the caller's
     // spelling of it. Nearly every caller already presses labels -- the mouse
     // and wheel paths, and the `dms ipc keystrokes test` preview -- but the
@@ -68,6 +73,20 @@ function press(state, label, now, config) {
     // badge at all" both.
     const keyId = function(raw) { return config.displayLabel ? config.displayLabel(raw) : raw; };
     const named = keyId(label);
+    // The upstream native listener discards hardware autorepeat before grouping.
+    // `heldKeys` holds display labels, so the guard has to compare identities
+    // too -- otherwise "KEY_LEFTCTRL" looks like a fresh key next to "Ctrl".
+    if (state.heldKeys.indexOf(named) !== -1) return state;
+    const heldKeys = state.heldKeys.concat([named]);
+
+    // What is already in the last group is part of the same physical gesture:
+    // the gate runs before the group is updated, so when the modifier arrives
+    // second the helper key is already sitting there.
+    const last = state.groups[state.groups.length - 1];
+    const previousLabels = last ? last.keys.map(function(key) { return keyId(key.label); }) : [];
+    if (!isAllowedSequence(heldKeys, previousLabels, config.eventFilter, config.allowedKeys))
+        return { heldKeys: heldKeys, groups: state.groups, nextUid: state.nextUid };
+
     const existing = last && last.keys.some(function(key) { return keyId(key.label) === named; });
     const held = function(key) { return heldKeys.some(function(raw) { return keyId(raw) === keyId(key.label); }); };
     let keys;
@@ -101,7 +120,14 @@ function press(state, label, now, config) {
             };
         }).filter(function(key) { return key !== null; });
     } else if (heldKeys.length === 1 || !last) {
-        keys = [newKey(named, now)];
+        // The gate may have discarded an earlier key of this same chord -- press
+        // C, then Ctrl: C was rejected while it stood alone, but once the
+        // modifier arrives the whole chord is allowed. `heldKeys` still
+        // remembers C, so the row is seeded from every held key rather than
+        // from the new one alone; otherwise C would sit in `heldKeys` yet never
+        // reach the screen, which is exactly "two keys pressed, one shown".
+        const seed = !last ? heldKeys : [named];
+        keys = seed.map(function(key) { return newKey(key, now); });
         append = true;
         replaceAll = !config.showEventHistory;
     } else {

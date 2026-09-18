@@ -25,7 +25,7 @@ sudo pacman -S libinput          # Arch
 - **Real press feedback**, with a badge counting repeats while you hold or hammer a key.
 - **Five animations** (none / fade / zoom / float / slide), any position on any display, independent X/Y margins.
 - **Full colour control** — separate normal and modifier colours, gradients, fractional border widths and radii.
-- **Filtering** — every key, hotkeys only, or your own list of first keys.
+- **Filtering** — every key, hotkeys only, or your own list of allowed keys.
 - Mouse clicks, drags and wheel as keycaps (off by default), and a mute keycap that knows the real sink state.
 
 ## Keycap styles
@@ -40,7 +40,7 @@ The skin supplies the *geometry*, your colour settings supply every *colour*, so
 
 Everything is on one page, reached from the plugin's settings icon in the DMS Control Center.
 
-- **Filtering & History** — show every key, only hotkeys, or your own comma-separated list of first keys; history size and direction; the toggle shortcut.
+- **Filtering & History** — show every key, only hotkeys, or your own comma-separated list of allowed keys; history size and direction; the toggle shortcut.
 - **Display & Margins** — which output to draw on, and the margins. Following the focused output is the default.
 - **Colors & Border** — colours, gradients, border width and corner radius.
 - **Color Presets** — 14 upstream palettes, plus style randomization.
@@ -48,7 +48,7 @@ Everything is on one page, reached from the plugin's settings icon in the DMS Co
 - **Keycap Content** — label variant, text case, alignment, icons, symbols.
 - **Group Background**, **Visibility Options**, **Input Device**, **General Settings**.
 
-Under **Hotkeys** a sequence shows only when its *first* pressed key is Ctrl, Shift, Alt, Super or Fn — so `Ctrl` then `A` shows, but `A` then `Ctrl` does not. Physical names like `KEY_RIGHTCTRL` are accepted, and media keys are dropped the way keyviz drops them; use **Off** to see everything.
+Under **Hotkeys** a sequence shows when Ctrl, Shift, Alt, Super or Fn is among its keys — `Ctrl` then `A` and `A` then `Ctrl` both show, and each keycap counts its own presses. Press order does not matter: two keys hit together land in whatever order the kernel reports them, and keyviz's original "first key decides" rule made that a coin flip. Sequences with no modifier at all are still hidden; use **Off** to see every key. **Custom** works the same way against your own comma-separated list instead of the modifier set — physical names like `KEY_RIGHTCTRL` are accepted, and media keys are dropped the way keyviz drops them.
 
 Held keys stay visible until released. Released keys expire individually after the **Fade Timeout** (5000 ms by default), and pressing a key again updates its count rather than adding a new cap.
 
