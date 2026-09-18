@@ -78,7 +78,12 @@ PluginComponent {
         // if the lines below never mention the keystroke you pressed, the
         // daemon is running old code, and no amount of reading the source will
         // show that.
-        function trace(seconds): string {
+        // The parameter MUST be typed. An untyped one is inferred as QVariant,
+        // which IPC refuses outright ("Type of argument 1 ... cannot be used
+        // across IPC") -- the handler is then only a warning at load time and
+        // the command silently does not exist. qmllint does not check this, so
+        // it has to be caught by loading the file.
+        function trace(seconds: string): string {
             const secs = Number(seconds) || 0;
             if (secs <= 0) {
                 traceTimer.stop();
