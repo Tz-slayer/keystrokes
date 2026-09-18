@@ -1,8 +1,13 @@
 // Keyboard event grouping ported from Keyviz src/stores/key_event.ts.
 // Input labels are the canonical names emitted by keyMapper.js. Snapshots are
 // immutable, so QML bindings can observe changes without sharing mutable keys.
+// `pendingRepeat` carries the one undecidable case across a single event: a key
+// was repressed with nothing held, so the row may be the start of the same
+// shortcut retyped (keep its members and count them) or of a different one that
+// merely shares the modifier (drop them). The next press settles it -- a key the
+// row already holds confirms the repeat, any other key refutes it.
 function initialState() {
-    return { heldKeys: [], groups: [], nextUid: 1 };
+    return { heldKeys: [], groups: [], nextUid: 1, pendingRepeat: false };
 }
 
 // keyviz key_event.ts MODIFIERS, expressed over the display labels this plugin
@@ -77,6 +82,10 @@ function press(state, label, now, config) {
     // `heldKeys` holds display labels, so the guard has to compare identities
     // too -- otherwise "KEY_LEFTCTRL" looks like a fresh key next to "Ctrl".
     if (state.heldKeys.indexOf(named) !== -1) return state;
+    // What was down when this press arrived, before the new key joins. The
+    // group's own key list cannot answer this: it still lists the members of an
+    // expired chord, so "is this chord live" read off it is a tautology.
+    const priorHeld = state.heldKeys;
     const heldKeys = state.heldKeys.concat([named]);
 
     // What is already in the last group is part of the same physical gesture:
@@ -85,14 +94,48 @@ function press(state, label, now, config) {
     const last = state.groups[state.groups.length - 1];
     const previousLabels = last ? last.keys.map(function(key) { return keyId(key.label); }) : [];
     if (!isAllowedSequence(heldKeys, previousLabels, config.eventFilter, config.allowedKeys))
-        return { heldKeys: heldKeys, groups: state.groups, nextUid: state.nextUid };
+        return {
+            heldKeys: heldKeys,
+            groups: state.groups,
+            nextUid: state.nextUid,
+            // A discarded key is not an answer, so an open question stays open.
+            pendingRepeat: state.pendingRepeat
+        };
 
     const existing = last && last.keys.some(function(key) { return keyId(key.label) === named; });
     const held = function(key) { return heldKeys.some(function(raw) { return keyId(raw) === keyId(key.label); }); };
+    // A chord is live when at least one of its members was already down before
+    // this press. That is what makes the prune trustworthy: while Ctrl is
+    // physically held, C vanishing from `heldKeys` really does mean the user let
+    // go of C, so Ctrl+C then Ctrl+V collapses to Ctrl+V instead of piling up.
+    //
+    // It deliberately does NOT answer "is this the same shortcut as last time".
+    // Both questions are asked of the same key list and want opposite answers --
+    // Ctrl+C released, then Ctrl repressed is either "Ctrl+C again" (keep C and
+    // count it) or "Ctrl+V" (drop C) -- and at this instant nothing on the
+    // machine can tell which. Hence `pendingRepeat` below: the decision waits
+    // for the next key, which is the first moment the two differ.
+    const chordLive = last ? last.keys.some(function(key) {
+        return priorHeld.some(function(raw) { return keyId(raw) === keyId(key.label); });
+    }) : false;
+    // The row this press belongs to left a repeat undecided last time, and the
+    // key now arriving is one of its own members: that is the confirmation.
+    // Retrying Ctrl+C keeps C after all, so both keycaps count up. Nothing is
+    // pruned, because every member of the chord is under a finger again.
+    const confirmsRepeat = existing && state.pendingRepeat && !chordLive;
+    // Decide the deferred question for the rows that came before this one: a
+    // `pendingRepeat` that this press did not confirm was a leftover member, so
+    // the row is now known to be a finished record and keeps its counts as-is.
     let keys;
     let append = false;
     let replaceAll = false;
-    if (existing) {
+    if (confirmsRepeat) {
+        keys = last.keys.map(function(key) {
+            return keyId(key.label) === named
+                ? { label: key.label, count: key.count + 1, lastPressedAt: now, animateIn: key.animateIn !== false }
+                : key;
+        });
+    } else if (existing) {
         // Repressing a key that already sits in the last group is a repeat of
         // *that group*, so it increments that keycap in place. The group is
         // never rebuilt and no new group is pushed.
@@ -107,11 +150,13 @@ function press(state, label, now, config) {
         // Incrementing in place fixes both: identity and count survive.
         //
         // A sibling that is no longer held is pruned, which is what upstream's
-        // `gKey.in(pressedKeys)` filter did. That pruning is what makes replace
-        // mode collapse Ctrl+C+V into Ctrl+V rather than accumulating every key
-        // ever pressed; without it the group grows monotonically.
+        // `gKey.in(pressedKeys)` filter did, and what makes Ctrl+C+V collapse
+        // into Ctrl+V rather than accumulating every key ever pressed. The prune
+        // is confined to a live chord: once every key has been lifted the row is
+        // a record of what was typed, and pruning there tore it down to the one
+        // key being repressed, so a retyped chord never counted its helper key.
         keys = last.keys.map(function(key) {
-            if (keyId(key.label) !== named) return held(key) ? key : null;
+            if (keyId(key.label) !== named) return (chordLive && !held(key)) ? null : key;
             return {
                 label: key.label,
                 count: key.count + 1,
@@ -131,8 +176,20 @@ function press(state, label, now, config) {
         append = true;
         replaceAll = !config.showEventHistory;
     } else {
-        append = config.showEventHistory && last.keys.some(function(key) { return !held(key); });
-        keys = (append ? last.keys.filter(held).map(carryKey) : last.keys).concat([newKey(named, now)]);
+        // A key the row does not already hold. Normally a member that is no
+        // longer down lingers, as upstream had it: dropping C the instant it is
+        // released would erase Ctrl+C+V the moment V arrives.
+        //
+        // The exception is the leftover a pending repeat was keeping alive. If
+        // the row's previous press left the repeat undecided, this unrelated key
+        // is the answer -- it is not the chord being retyped, so the member that
+        // was being held in reserve goes. Without this, Ctrl+C then Ctrl+V keeps
+        // the C and reads as one long Ctrl+C+V.
+        const refuted = state.pendingRepeat
+            ? last.keys.filter(function(key) { return held(key); })
+            : last.keys;
+        append = config.showEventHistory && refuted.some(function(key) { return !held(key); });
+        keys = (append ? refuted.filter(held).map(carryKey) : refuted).concat([newKey(named, now)]);
     }
     const group = { uid: !config.showEventHistory ? 0 : (append ? state.nextUid : last.uid), keys: keys };
     const groups = replaceAll ? [group] : append ? state.groups.concat([group])
@@ -141,7 +198,12 @@ function press(state, label, now, config) {
     return {
         heldKeys: heldKeys,
         groups: config.showEventHistory ? groups.slice(-limit) : groups,
-        nextUid: state.nextUid + (append ? 1 : 0)
+        nextUid: state.nextUid + (append ? 1 : 0),
+        // Only a repress onto a multi-key row that arrived with nothing held is
+        // left open -- and only when it was not itself the answer to an open
+        // question. Anything else, including the refutation a foreign key just
+        // delivered, is already decided.
+        pendingRepeat: !confirmsRepeat && existing && !chordLive && last.keys.length > 1
     };
 }
 
@@ -162,7 +224,8 @@ function dropKey(state, label) {
                 ? group.keys.filter(function(key) { return key.label !== label; }) : group.keys;
             return keys.length === group.keys.length ? group : { uid: group.uid, keys: keys };
         }).filter(function(group) { return group.keys.length > 0; }),
-        nextUid: state.nextUid
+        nextUid: state.nextUid,
+        pendingRepeat: state.pendingRepeat
     };
 }
 
@@ -183,7 +246,8 @@ function release(state, label, now) {
                 } : key;
             }) };
         }),
-        nextUid: state.nextUid
+        nextUid: state.nextUid,
+        pendingRepeat: state.pendingRepeat
     };
 }
 
@@ -195,5 +259,13 @@ function tick(state, now, config) {
         return keys.length === group.keys.length ? group : { uid: group.uid, keys: keys };
     }).filter(function(group) { return group.keys.length > 0; });
     if (groups.length === state.groups.length && groups.every(function(group, index) { return group === state.groups[index]; })) return state;
-    return { heldKeys: state.heldKeys, groups: groups, nextUid: state.nextUid };
+    return {
+        heldKeys: state.heldKeys,
+        groups: groups,
+        nextUid: state.nextUid,
+        // Expiry is not a new press, so it cannot answer the pending question.
+        // The row it belonged to may have lost the very key that was going to
+        // answer it, in which case the question simply lapses with the row.
+        pendingRepeat: state.pendingRepeat
+    };
 }

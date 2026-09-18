@@ -177,7 +177,12 @@ test('history mode: alternating two held keys counts each independently', () => 
   assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [2, 2]);
 });
 
-test('history mode: a released sibling is pruned away on the next repress', () => {
+test('history mode: a stale sibling is pruned once a foreign key proves it stale', () => {
+  // Repressing a member of an expired row is ambiguous, and the row cannot know
+  // at that instant whether the user is retyping it (A,B again -- keep B and
+  // count it) or has moved to a shortcut that merely starts the same way (A,C).
+  // The decision waits for the next key; a key the row does not hold is what
+  // proves the leftover member was stale.
   const history = {showEventHistory:true, maxHistory:5};
   let state = down(api.initialState(), 'A', 0, history);
   state = down(state, 'B', 1, history);
@@ -185,13 +190,26 @@ test('history mode: a released sibling is pruned away on the next repress', () =
 
   state = api.release(state, 'A', 3);
   state = down(state, 'A', 4, history);
-  assert.deepEqual(labels(state), [['A']], 'the released sibling is pruned, as upstream did');
+  assert.deepEqual(labels(state), [['A', 'B']],
+    'the leftover sibling is still on the row while the repeat is undecided');
   assert.equal(state.groups[0].keys[0].count, 2);
-  assert.equal(state.groups.length, 1, 'no group churn on the repeat');
 
-  state = api.release(state, 'A', 5);
-  state = down(state, 'A', 6, history);
-  assert.equal(state.groups[0].keys[0].count, 3, 'repeats keep counting');
+  state = down(state, 'C', 5, history);
+  assert.deepEqual(labels(state), [['A', 'C']],
+    'C proves A,B is finished, so the reserved B is dropped');
+  assert.equal(state.groups.length, 1, 'the refuted row is rewritten, not duplicated');
+  // A is still under a finger and keeps the count it had reached; C is new.
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [2, 1]);
+
+  // A sibling, by contrast, confirms the repeat, so B stays and counts.
+  state = api.release(state, 'C', 6);
+  state = api.release(state, 'A', 6);
+  state = down(state, 'A', 7, history);
+  state = down(state, 'B', 8, history);
+  assert.deepEqual(labels(state), [['A', 'B']],
+    'retyping A,B keeps the row whole instead of dropping B');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [3, 1],
+    'and every member of the retyped chord counts, not just the first');
 });
 
 test('replace mode: a single key repeat still increments with another key held', () => {
@@ -201,6 +219,35 @@ test('replace mode: a single key repeat still increments with another key held',
   state = down(state, 'V', 3);
   assert.equal(state.groups[0].keys[1].count, 2,
     'replace mode keeps the increment path when the repeat is the only new key');
+});
+
+// A combo is counted per key, not per shortcut: retyping Ctrl+C increments Ctrl
+// AND C. Counting only the modifier was the visible bug -- the overlay showed
+// Ctrl×3 beside C×1 for three identical presses, so the helper key looked stuck.
+test('retyping a combo counts every key of it, modifier and helper alike', () => {
+  function chord(state, now) {
+    let next = down(state, 'Ctrl', now);
+    next = down(next, 'C', now + 1);
+    next = api.release(next, 'C', now + 2);
+    return api.release(next, 'Ctrl', now + 3);
+  }
+  let state = chord(api.initialState(), 0);
+  assert.equal(state.groups[0].keys[0].count, 1);
+  assert.equal(state.groups[0].keys[1].count, 1);
+
+  state = chord(state, 10);
+  state = chord(state, 20);
+  assert.deepEqual(labels(state), [['Ctrl', 'C']], 'a retyped combo is still one row');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [3, 3],
+    'Ctrl and C both counted the three presses, not just the modifier');
+
+  // The modifier keeps counting too when it is the key held down rather than
+  // repressed, which is the same rule seen from the other side.
+  let held = down(api.initialState(), 'Ctrl', 0);
+  held = down(held, 'C', 1);
+  held = api.release(held, 'C', 2);
+  held = down(held, 'C', 3);
+  assert.deepEqual(plain(held.groups[0].keys.map(key => key.count)), [1, 2]);
 });
 
 // The identity a keycap is matched by must be the *displayed* label, because

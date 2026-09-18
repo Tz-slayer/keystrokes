@@ -52,6 +52,8 @@ Under **Hotkeys** a sequence shows when Ctrl, Shift, Alt, Super or Fn is among i
 
 Held keys stay visible until released. Released keys expire individually after the **Fade Timeout** (5000 ms by default), and pressing a key again updates its count rather than adding a new cap.
 
+A combo is counted per key, not per shortcut: type `Ctrl`+`C` three times and both keycaps read 3. A released key is also kept on the row while the rest of the shortcut is still held, so `Ctrl`+`C`+`V` reads as all three until you let go — the row then drops `C` as soon as a fresh `Ctrl`+`V` makes clear the old `C` was not coming back.
+
 
 ## Credits
 
