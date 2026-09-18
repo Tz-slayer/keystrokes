@@ -14,7 +14,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const DOCS = ["README.md", "docs/keycap-style-parity.md"];
+const DOCS = ["README.md"];
 
 // GitHub's anchor algorithm, good enough for Latin + CJK headings.
 function slug(text) {

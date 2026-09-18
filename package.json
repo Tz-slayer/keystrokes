@@ -1,6 +1,6 @@
 {
     "name": "dms-keystrokes",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "private": true,
     "description": "Keystroke and mouse overlay for DankMaterialShell, ported from keyviz",
     "scripts": {
