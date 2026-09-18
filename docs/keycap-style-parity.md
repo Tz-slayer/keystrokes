@@ -20,11 +20,11 @@
 
 所有设置均已连接到运行时；旧键帽皮肤名及 margin/history/normal-key 设置保留迁移。
 设置界面使用 DMS 控件，定制过滤用文本列表，快捷键支持输入或录制；不是原版 React 设置窗口的视觉复制。
-Mouse 相关设置与指针定位不属于本次复刻范围。导入的 mouse 段仅保存用于原样导出。
+Mouse 相关设置与指针定位不属于本次复刻范围（指针定位的排查结论见文末）。导入的 mouse 段仅保存用于原样导出。
 
 ## 结构
 
-目录按依赖划分（细节见 [CONTRIBUTING.md](../CONTRIBUTING.md#project-layout) 的 Project layout）：`core/` 与 `ui/` 不依赖 DMS。
+目录按依赖划分：`core/` 与 `ui/` 不依赖 DMS，只有根目录的三个入口可以引用 `qs.*`、`Theme`、`I18n` 等 shell 侧 API。
 
 - `core/keyvizStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
 - `core/keyvizEvents.js`：不可变按键状态、过滤、分组、计数和过期。
@@ -69,3 +69,38 @@ QML 使用运行时断言与截图检查。预览生成 `/tmp/keyviz-parity-prev
   看起来就是跳跃）。另有 `@primary` 钉死在第一块屏、完全不移动——这也是原版的行为，因为 keyviz 会把空的
   `monitor` 钉到 `monitors[0]`（appearance.tsx:28-29）。指定输出名则固定到该输出。
   分组位置使用屏幕内绝对目标坐标，避免底部/右侧历史项删除时父容器缩放与子项位移动画重复补偿。
+
+## 指针定位：为什么没有光标涟漪
+
+上游有三个特性锚定**指针绝对位置**——点击涟漪、常驻高亮、跟随光标的按钮指示器。
+本插件均未实现，原因记录如下（负面结论，代码里无处安放，故存于此）。
+
+Wayland 客户端无法自行读取该位置，读原始设备节点也不行：`/dev/input/event*` 只携带**相对**增量
+（`REL_X` / `REL_Y`）加按键与滚轮状态。光标位置属于合成器，不属于内核。
+
+本机用 `uinput` 虚拟指针实测，向 `REL_X` 写入 20 次相同的 `10`：
+
+| | 原始 evdev | libinput `POINTER_MOTION` |
+|---|---|---|
+| 慢速（间隔 50 ms） | 每次都是 `10` | 3.50、9.00，之后 10.00 → 合计 **92.5 px** |
+| 快速（间隔 1 ms） | 每次都是 `10` | 9.20、17.54，之后 20.00 → 合计 **186.7 px** |
+
+即原始增量不是像素：同样 200 设备单位，仅因速度不同就变成 92.5 px 或 186.7 px。
+libinput 的位移值已含加速度，积分它比积分原始 evdev 贴近光标得多，但仍需要一个起始种子、
+每输出的缩放系数、屏幕边缘钳制，以及能挺过合成器 warp 的手段——这些客户端都拿不到。
+逐项排查过目标环境：
+
+- **niri**（26.04）——`niri msg` 提供 `outputs`、`workspaces`、`windows`、`layers`、
+  `focused-output`、`focused-window`、`pick-window`、`pick-color`、`event-stream` 等，
+  但**没有光标位置查询**，也没有任何光标相关的 `action`。
+- **Quickshell** 不提供全局光标 API（`Quickshell/Wayland` 只通过 screencopy 接触光标，
+  那是截图像素，不是坐标）。
+- 点击穿透的 layer-shell 表面收不到指针移动；而不穿透的那个会吞掉下层所有应用的点击。
+- 本机跑着 **Xwayland**（`-rootless`），`xdotool getmouselocation` 确实返回可与
+  `xdotool mousemove` 往返的绝对坐标。但**尚未确认**它跟踪的是否为合成器光标，
+  还是仅在指针位于 X 客户端之上时才更新，因此没有任何逻辑依赖它。
+
+上游在**事件层面**所做的一切（按键键帽、`Drag`、`ScrollUp`/`ScrollDown`）都无需上述能力，
+仅凭 `/dev/input` 即可实现。要让涟漪真正锚定光标，需要合成器配合（IPC 查询或
+`wl_pointer` 式的全局），而 niri 目前不提供。
+

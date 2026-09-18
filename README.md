@@ -147,7 +147,7 @@ Imports are validated field by field (enums, ranges, colour format) and rejected
 
 Mouse buttons, `Drag` and the wheel are off by default; enable **Show Mouse Events**. They then run through the *same* state machine as the keyboard, mirroring keyviz — so they join the row a held modifier started, and `Ctrl` + wheel is one `Ctrl + ScrollDown` row rather than a second one.
 
-One keyviz feature is deliberately **not** implemented: the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and the raw device nodes only carry relative deltas that are not pixels. Implementing it truthfully needs compositor support that does not exist yet; the measurements behind that conclusion are in [CONTRIBUTING.md](CONTRIBUTING.md#cursor-position-why-the-ripple-is-missing).
+One keyviz feature is deliberately **not** implemented: the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and the raw device nodes only carry relative deltas that are not pixels. Implementing it truthfully needs compositor support that does not exist yet; the measurements behind that conclusion are in [the parity notes](docs/keycap-style-parity.md#指针定位为什么没有光标涟漪).
 
 ## Troubleshooting
 
@@ -158,7 +158,7 @@ Check in order: is the visualizer enabled? Is your user in the `input` group (`i
 The default **Display** setting follows the focused output. If it seems stuck, reselect **Follow focused output** in settings.
 
 **I changed the overlay and my edit had no effect.**
-You probably used `reload` instead of `restart`, which leaves the rendering running from the previous compile. See [CONTRIBUTING.md](CONTRIBUTING.md#the-hot-reload-trap) — this is the single most common source of false bug reports here.
+You probably used `reload` instead of `restart`. Reload recompiles only the daemon, so the overlay and the `.js` modules keep running from the previous compile — a half-updated plugin where your change really did have no effect. Use `dms restart` after touching anything in `ui/`, `core/`, `settings/` or `fonts/`.
 
 **The keycaps look slightly different from keyviz's own screenshots.**
 Qt and WebView rasterize fonts and blur shadows slightly differently. Geometry follows keyviz's em measurements, not its pixels.
@@ -176,7 +176,7 @@ One name keeps "keyviz" on purpose: the core modules (`keyvizStyle.js`, `keyvizE
 
 ## Contributing
 
-Developer documentation — setup, the reload/restart trap, project layout, testing and the reasoning behind the trickier design decisions — lives in **[CONTRIBUTING.md](CONTRIBUTING.md)**. The parity record for the keyviz port is in [docs/keycap-style-parity.md](docs/keycap-style-parity.md).
+The parity record for the keyviz port — what is 1:1 with upstream, what is not, and the evidence — is in [docs/keycap-style-parity.md](docs/keycap-style-parity.md).
 
 ## License
 
