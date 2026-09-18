@@ -86,6 +86,82 @@ test('history standalone repeated key increments count in its group', () => {
   assert.equal(state.groups[0].keys[0].count, 2);
 });
 
+// ── count while several keys are held together ────────────────────────────────
+//
+// Upstream keyviz only increments a count through `existingKey.press()`, on the
+// branches that require the last group to hold a single key. As soon as two or
+// more keys are held together the history-mode branch rebuilds the group from
+// scratch, so the count restarts at 1 and an extra group is pushed. These tests
+// pin that down as the intended (upstream-matching) behaviour, so a future
+// refactor of the counting code has to change them deliberately.
+
+test('history mode: a second key held alongside does not reset the first', () => {
+  const history = {showEventHistory:true, maxHistory:5};
+  let state = down(api.initialState(), 'A', 0, history);
+  state = down(state, 'B', 1, history);
+  assert.deepEqual(labels(state), [['A', 'B']]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
+    'a freshly added neighbour leaves the existing count alone');
+});
+
+test('history mode: repressing a key of a multi-key group restarts counts and pushes a group', () => {
+  const history = {showEventHistory:true, maxHistory:5};
+  let state = down(api.initialState(), 'A', 0, history);
+  state = down(state, 'B', 1, history);
+  state = down(state, 'A', 2, history);   // A is already held; release is required first
+
+  assert.deepEqual(labels(state), [['A', 'B']], 'A is still held, so nothing is appended');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
+    'a held key cannot increment: the autorepeat guard returns the state unchanged');
+});
+
+test('history mode: releasing then repressing inside a multi-key group restarts the count', () => {
+  const history = {showEventHistory:true, maxHistory:5};
+  let state = down(api.initialState(), 'A', 0, history);
+  state = down(state, 'B', 1, history);
+  state = api.release(state, 'A', 2);
+  state = down(state, 'A', 3, history);
+
+  // Documented upstream behaviour: the rebuilt group restarts every count at 1
+  // and `append` pushes a second group rather than growing the first.
+  assert.deepEqual(labels(state), [['A', 'B'], ['A', 'B']]);
+  assert.equal(state.groups.length, 2);
+  assert.deepEqual(plain(state.groups[1].keys.map(key => key.count)), [1, 1]);
+});
+
+test('history mode: the count resumes incrementing once the group is a single key again', () => {
+  const history = {showEventHistory:true, maxHistory:5};
+  let state = down(api.initialState(), 'A', 0, history);
+  state = down(state, 'B', 1, history);
+  state = api.release(state, 'B', 2);           // B leaves the picture again
+
+  // The first repress after a multi-key group goes through the rebuild branch,
+  // so it restarts at 1 and opens a new group rather than resuming from 1 -> 2.
+  state = api.release(state, 'A', 3);
+  state = down(state, 'A', 4, history);
+  assert.deepEqual(labels(state), [['A', 'B'], ['A']]);
+  assert.equal(state.groups[1].keys[0].count, 1);
+
+  // From there the group holds a single key again, so the ordinary increment
+  // path applies and further repeats grow the count.
+  state = api.release(state, 'A', 5);
+  state = down(state, 'A', 6, history);
+  assert.equal(state.groups[1].keys[0].count, 2);
+  state = api.release(state, 'A', 7);
+  state = down(state, 'A', 8, history);
+  assert.equal(state.groups[1].keys[0].count, 3,
+    'a lone key in the newest group increments on every repeat');
+});
+
+test('replace mode: a single key repeat still increments with another key held', () => {
+  let state = down(api.initialState(), 'Ctrl');
+  state = down(state, 'V', 1);
+  state = api.release(state, 'V', 2);
+  state = down(state, 'V', 3);
+  assert.equal(state.groups[0].keys[1].count, 2,
+    'replace mode keeps the increment path when the repeat is the only new key');
+});
+
 test('expiry starts at release, keeps held keys and prunes individual keys', () => {
   let state = down(api.initialState(), 'Ctrl');
   state = down(state, 'C', 1);

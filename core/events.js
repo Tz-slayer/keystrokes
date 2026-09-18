@@ -64,6 +64,19 @@ function press(state, label, now, config) {
         keys = append ? last.keys.filter(held).map(function(key) {
             // A held modifier is context carried into the next shortcut. Only
             // the key that generated this press should replay its entrance.
+            //
+            // NOTE (upstream parity, deliberate): this branch rebuilds the
+            // whole group, so every key in it -- including the one just
+            // repressed -- restarts at count 1. Upstream does the same thing
+            // (`new KeyEvent(...)` in keyviz key_event.ts:156-163) and only
+            // reaches its `existingKey.press()` increment on the branches
+            // above, which require `last.keys.length <= 1`.
+            //
+            // So while two or more keys are held together (A+B, then press A
+            // again), the count does NOT grow, and because `append` is true a
+            // fresh group is pushed as well. Upstream behaves identically; this
+            // is recorded here so it is not mistaken for a regression -- see
+            // tests/event-parity.test.cjs for the locked-in cases.
             return newKey(key.label, now, key.label === label);
         })
             : last.keys.filter(function(key) { return key.label === label || held(key); }).map(function(key) {
