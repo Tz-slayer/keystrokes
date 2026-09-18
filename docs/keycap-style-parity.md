@@ -24,7 +24,7 @@ Mouse 相关设置与指针定位不属于本次复刻范围。导入的 mouse �
 
 ## 结构
 
-目录按依赖划分（细节见 README 的 Project layout）：`core/` 与 `ui/` 不依赖 DMS。
+目录按依赖划分（细节见 [CONTRIBUTING.md](../CONTRIBUTING.md#project-layout) 的 Project layout）：`core/` 与 `ui/` 不依赖 DMS。
 
 - `core/keyvizStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
 - `core/keyvizEvents.js`：不可变按键状态、过滤、分组、计数和过期。

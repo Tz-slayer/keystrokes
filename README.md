@@ -16,7 +16,7 @@ Press `Ctrl + Shift + S` and three keycaps appear over your desktop, animate in,
 
 ## Contents
 
-[Install](#install) · [What it does](#what-it-does) · [Keycap styles](#keycap-styles) · [Everyday use](#everyday-use) · [Settings](#settings) · [Theming and portability](#theming-and-portability) · [Mouse support](#mouse-support) · [Troubleshooting](#troubleshooting) · [Under the hood](#under-the-hood) · [Development](#development) · [Credits](#credits) · [License](#license)
+[Install](#install) · [What it does](#what-it-does) · [Keycap styles](#keycap-styles) · [Everyday use](#everyday-use) · [Settings](#settings) · [Theming and portability](#theming-and-portability) · [Mouse support](#mouse-support) · [Troubleshooting](#troubleshooting) · [Credits](#credits) · [Contributing](#contributing) · [License](#license)
 
 ## Install
 
@@ -147,7 +147,7 @@ Imports are validated field by field (enums, ranges, colour format) and rejected
 
 Mouse buttons, `Drag` and the wheel are off by default; enable **Show Mouse Events**. They then run through the *same* state machine as the keyboard, mirroring keyviz — so they join the row a held modifier started, and `Ctrl` + wheel is one `Ctrl + ScrollDown` row rather than a second one.
 
-One keyviz feature is deliberately not implemented: the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and `/dev/input/event*` carries only *relative* deltas that are not pixels — the same 20 device units measured 92.5 px or 186.7 px depending purely on how fast the mouse moved, because acceleration is applied downstream. `niri` exposes no cursor-position query and Quickshell has no global cursor API, so a truthful implementation needs compositor support that does not exist yet. The measurements and the full reasoning are in [docs/keycap-style-parity.md](docs/keycap-style-parity.md) and the *Cursor position* section below.
+One keyviz feature is deliberately **not** implemented: the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and the raw device nodes only carry relative deltas that are not pixels. Implementing it truthfully needs compositor support that does not exist yet; the measurements behind that conclusion are in [CONTRIBUTING.md](CONTRIBUTING.md#cursor-position-why-the-ripple-is-missing).
 
 ## Troubleshooting
 
@@ -155,108 +155,13 @@ One keyviz feature is deliberately not implemented: the **ripple and indicator a
 Check in order: is the visualizer enabled? Is your user in the `input` group (`id -nG | tr ' ' '\n' | grep input`)? Is the libinput CLI installed? Is the **Event Filter** set to **Hotkeys** while you are testing with ordinary letters? `dms ipc keystrokes test` should always draw something — if it does, input plumbing is the problem, not rendering.
 
 **It stopped appearing on my second monitor.**
-The default **Display** setting follows the focused output. If it seems stuck, reselect **Follow focused output** in settings — see the note in *Under the hood* about why that setting needs a truthy sentinel.
+The default **Display** setting follows the focused output. If it seems stuck, reselect **Follow focused output** in settings.
 
 **I changed the overlay and my edit had no effect.**
-You probably used `reload` instead of `restart`. See [Development](#development) — this is the single most common source of false bug reports here.
+You probably used `reload` instead of `restart`, which leaves the rendering running from the previous compile. See [CONTRIBUTING.md](CONTRIBUTING.md#the-hot-reload-trap) — this is the single most common source of false bug reports here.
 
 **The keycaps look slightly different from keyviz's own screenshots.**
 Qt and WebView rasterize fonts and blur shadows slightly differently. Geometry follows keyviz's em measurements, not its pixels.
-
-## Under the hood
-
-This section is for anyone reading or patching the code. If you just want to use the plugin, you can stop here.
-
-### Layout, split by dependency
-
-Everything under `core/` and `ui/` is plain Qt Quick plus Quickshell. Only the three entry points at the repository root may import `qs.*` (the DMS API). This is enforced by a test, and it is what keeps the rendering testable offscreen and the plugin portable to a non-DMS Quickshell shell.
-
-| Path | What lives there | DMS-free? |
-|---|---|---|
-| `KeyvizDaemon.qml`, `KeyvizWidget.qml`, `KeyvizSettings.qml` | The entry points named by `plugin.json`. | no — DMS glue |
-| `core/` | Event state machine, settings schema and migration, key labels, icon paths, colour maths, layout maths, input parsing, animation vocabulary, ListModel reconciliation. | **yes** |
-| `ui/` | Overlay window, group and keycap renderers. | **yes** |
-| `settings/` | Settings sections and their shared row chrome. | no — DMS widgets |
-| `dms/widgets/` | Vendored copies of the DMS widgets the settings pages build on. | no — vendored |
-| `tests/`, `docs/`, `fonts/` | Node/Qt tests, parity records, bundled Inter. | — |
-
-Porting to a non-DMS Quickshell shell means replacing `PluginComponent`/`PluginService`, `Theme.*` and `StyledText`/`StyledRect` — not the windowing or key capture, which come from Quickshell and layer-shell.
-
-### Two design decisions that are load-bearing
-
-**The group panel is a background, never a clip.** keyviz draws a rounded panel behind each group. `ui/KeyvizGroup.qml` sets no `clip` and masks nothing: a decoration that legitimately reaches past the row (the press-count badge, the laptop skin's drop shadow) is drawn in full, and the panel grows to cover it. `core/groupFrame.js` owns that arithmetic, so the keycap and the group read the same numbers and the drawing cannot drift from the box.
-
-**The screen state machine holds still on purpose.** Moving the overlay's output re-creates the surface, which replays every keycap's entrance animation and reads as a refresh. So the output only changes when the compositor can actually *name* the focused output and that name survives a 250 ms settle window. `CompositorService.getFocusedScreen()` cannot express "I don't know" — it answers `screens[0]`, indistinguishable from a real move to the first monitor — so the overlay reads the raw output name and holds its current output while unknown.
-
-> [!IMPORTANT]
-> **Automatic mode is stored as a truthy sentinel** (`@focused`), not an empty string. DMS's `SelectionSettingPlus` resolves a chosen dropdown label with `labelToValue[label] || label`, and an empty-string option value is falsy — so `""` would silently persist the option's own *label*, leaving the overlay pinned to one display with the setting unable to recover. The rule lives in exactly one place (`core/overlayLayout.followsFocus`), which both the overlay and the settings page call; the legacy `""` spelling is still read as automatic so existing installs keep working. Any new dropdown option whose value could be `""`, `0` or `false` has the same hazard.
-
-### Cursor position (why the ripple is missing)
-
-Measured on this machine with a `uinput` virtual pointer, 20 identical writes of `REL_X = 10`:
-
-| | raw evdev | libinput `POINTER_MOTION` |
-|---|---|---|
-| slow (50 ms apart) | `10` every time | 3.50, 9.00, then 10.00 → **92.5 px** total |
-| fast (1 ms apart) | `10` every time | 9.20, 17.54, then 20.00 → **186.7 px** total |
-
-Raw deltas are not pixels. libinput's values already include acceleration, so integrating *those* tracks the cursor far better — but it still needs a starting seed, the per-output scale factor, screen-edge clamping, and a way to survive compositor warps, none of which a client can obtain. Checked and ruled out:
-
-- **niri** exposes `outputs`, `workspaces`, `windows`, `layers`, `focused-output`, `focused-window`, `pick-window`, `pick-color`, `event-stream` — but no cursor-position query and no cursor action.
-- **Quickshell** ships no global cursor API.
-- A click-through layer-shell surface receives no pointer motion; a non-click-through one would swallow clicks from everything below it.
-- **Xwayland** is running here and `xdotool getmouselocation` does return coordinates that round-trip — but it is unconfirmed whether that tracks the compositor cursor or only updates over X clients, so nothing depends on it.
-
-Everything keyviz does at the *event* level is reachable without any of this.
-
-### Testing
-
-```bash
-npm test        # node --test tests/*.test.cjs
-```
-
-The explicit glob matters — a bare `tests/` argument behaves differently across Node versions. The Qt rendering tests spawn `qmltestrunner` (Qt 6's, found at `/usr/lib/qt6/bin/` or via `QML_TEST_RUNNER`) and **fail** rather than skip when it is missing, so install the Qt 6 tools before trusting a red run after touching `ui/`.
-
-Each guard exists because its failure once looked like nothing more than a rendering bug:
-
-| Test | What it holds |
-|---|---|
-| `layering.test.cjs` | `core/` and `ui/` must not reference DMS types. |
-| `module-imports.test.cjs` | A `.js` module used through a qualifier must be imported in the same file. Nothing else catches this — qmllint cannot resolve `qs.*`, and the first symptom is a `ReferenceError` in a signal handler at runtime. |
-| `settings-style.test.cjs` | Settings pages are built from the DMS-styled rows; no stock `ComboBox`/`CheckBox`/`TextArea`. |
-| `list-model-sync.test.cjs` | Rows are updated in place, never re-created. |
-| `keycap-regression.test.cjs` | Renders `Keycap`/`KeyvizGroup` with real Qt offscreen and asserts geometry against keyviz's em measurements. |
-| `group-frame.test.cjs` | The group panel encloses everything it paints. |
-| `follow-focus.test.cjs` | Drives the screen state machine through the pin-and-return round trip. |
-
-`tests/keycap-regression.test.cjs` copies `ui/`, `core/` and `fonts/` into a temp directory, shims `StyledText`, and lets Qt render the real components — checking skin heights, padding, modifier alignment, long PBT labels, surface painting and perceptual colour conversion.
-
-### Settings UI style
-
-Every option is a row with the same chrome: label, an info icon whose tooltip carries the description, a reset affordance that appears once the value differs from its default, and a full-width control underneath. That is the shape of the vendored `*SettingPlus` widgets, and `settings/KeyvizRow.qml` reproduces it for the cases they cannot express.
-
-When adding a setting, extend a row rather than dropping a control into a `SettingsCard` — a stock `ComboBox` next to a themed row is exactly the mismatch `settings-style.test.cjs` rejects, and every component a page may declare is listed in that test's `ALLOWED` set.
-
-Colours are circular swatches, not fields: the circle *is* the value, so related colours share a row. Clicking one opens DMS's colour picker, which carries an **opacity** slider — keyviz writes `#RRGGBBAA` and its default group panel is `#ffffff99`, so alpha has to survive the round trip. That is also why the circle sits on a checkerboard. `core/keycapColors.js` owns both directions of the CSS conversion, because Qt's own parser reads an 8-digit hex as `#AARRGGBB`.
-
-## Development
-
-The plugin loads from `~/.config/DankMaterialShell/plugins/<id>/`, so the usual setup is a symlink from there to your checkout.
-
-**`dms ipc plugins reload keystrokes` recompiles `KeyvizDaemon.qml` only.** The overlay and the `.js` modules it pulls in live in `ui/` and `core/`, so a reload leaves them running from the previous compile — you get a *half-updated* plugin where the daemon is new and the rendering is old, and your change appears to have had no effect at all. This has already produced two false bug reports.
-
-| You changed | Run |
-|---|---|
-| `KeyvizDaemon.qml` | `dms ipc plugins reload keystrokes` |
-| `ui/**`, `core/**`, `fonts/` | `dms restart` |
-| `settings/**`, `dms/widgets/**`, `plugin.json` | `dms restart` |
-
-To check whether what is running matches what is on disk, compare file mtimes with the shell's start time — if a source file is newer than the process, the running plugin is stale:
-
-```bash
-ls -l --time-style=+'%m-%d %H:%M' ~/.config/DankMaterialShell/plugins/keystrokes/**/*.qml
-ps -eo lstart,cmd | grep '[d]ms run'
-```
 
 ## Credits
 
@@ -268,6 +173,10 @@ This plugin would not exist without two projects, and the split matters when rea
 Where the plugin deliberately departs from keyviz, the code says so — the mute keycap is the clearest example, drawing the sink's real mute state instead of always showing a crossed speaker.
 
 One name keeps "keyviz" on purpose: the core modules (`keyvizStyle.js`, `keyvizEvents.js`, `keyvizMotion.js`), because they speak keyviz's own format and event model.
+
+## Contributing
+
+Developer documentation — setup, the reload/restart trap, project layout, testing and the reasoning behind the trickier design decisions — lives in **[CONTRIBUTING.md](CONTRIBUTING.md)**. The parity record for the keyviz port is in [docs/keycap-style-parity.md](docs/keycap-style-parity.md).
 
 ## License
 
