@@ -2,7 +2,7 @@
     "id": "keystrokes",
     "name": "Keystrokes",
     "icon": "keyboard",
-    "description": "Displays keystrokes and mouse actions on screen with keyviz-style animations, for screencasts and tutorials",
+    "description": "Displays keystrokes and mouse actions on screen, with keyviz's animations and keycaps, for screencasts and tutorials",
     "version": "1.2.0",
     "author": "hthienloc",
     "type": "composite",

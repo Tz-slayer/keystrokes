@@ -50,7 +50,7 @@ The id is what DMS keys settings on, so an upgrade has to move three things:
 ## What it does
 
 - **Combinations and single keys.** `Ctrl + Shift + S` is one row; typed letters appear individually.
-- **Four keyviz keycap skins**, ported 1:1 from keyviz's own components — see [Keycap styles](#keycap-styles).
+- **Four keycap skins**, ported 1:1 from keyviz's own components — see [Keycap styles](#keycap-styles).
 - **Real press feedback.** A keycap sinks while the key is physically held and rises on release.
 - **Per-key repeat counts.** Hold or hammer a key and a badge counts the repeats.
 - **Five animations** (none / fade / zoom / float / slide) with a configurable duration.
@@ -62,7 +62,7 @@ The id is what DMS keys settings on, so an upgrade has to move three things:
 - **Mouse clicks, drags and wheel** as keycaps (off by default).
 - **A mute keycap that knows the state** — crossed speaker while muted, sound waves while not.
 - **A global toggle shortcut** (default `Shift + F10`).
-- **Themes move between machines** as native keyviz style JSON.
+- **Themes move between machines** as native style JSON.
 
 ## Keycap styles
 
@@ -97,7 +97,7 @@ dms ipc keystrokes disable
 dms ipc keystrokes setStyle pbt        # minimal | laptop | lowprofile | pbt
 dms ipc keystrokes test                # show a sample Ctrl + Shift + A, no typing needed
 
-dms ipc keystrokes exportStyle         # dump the theme as keyviz style JSON
+dms ipc keystrokes exportStyle         # dump the theme as a keyviz style JSON
 dms ipc keystrokes importStyle '<json>'  # apply one
 ```
 
@@ -109,16 +109,18 @@ The settings page is grouped as follows.
 
 | Group | What you control |
 |---|---|
-| **Keyviz Color Presets** | The 14 upstream palettes and style randomization. |
-| **Keyviz Filtering & History** | Event filter, the custom allowed-key list, history on/off, direction, limit, and the toggle shortcut. |
-| **Keyviz Display & Margins** | Which output to draw on, linked or independent X/Y margins. |
-| **Keyviz Colors & Border** | Normal and modifier colours, gradient, border width and corner radius. |
+| **Color Presets** | The 14 upstream palettes and style randomization. |
+| **Filtering & History** | Event filter, the custom allowed-key list, history on/off, direction, limit, and the toggle shortcut. |
+| **Display & Margins** | Which output to draw on, linked or independent X/Y margins. |
+| **Colors & Border** | Normal and modifier colours, gradient, border width and corner radius. |
 | **General Settings** | Enable, fade timeout, font size. |
 | **Layout & Animations** | Screen position, keycap style, animation type and duration. |
 | **Keycap Content** | Label variant (icon / full text / short text), text case, alignment, icons, symbols, modifier alignment. |
 | **Group Background** | The rounded panel behind each group, and its colour. |
 | **Visibility Options** | Mouse events, drag threshold, press-count badge. |
 | **Input Device** | Follow all keyboards, or listen to one device. |
+| **IPC Commands** | The command line reference, with copy buttons. |
+| **Usage Guide** | A short in-app walkthrough. |
 
 ### Filtering, in detail
 
@@ -130,6 +132,8 @@ Every accepted event becomes a keycap — there is no typing-stream mode.
 
 Physical names like `KEY_RIGHTCTRL` are accepted, letting you restrict a filter to one side. Under **Hotkeys** a lone media key — mute included — is dropped, exactly as keyviz drops it; use **Off** to see everything. Old `showNormalKeys`, `historyLimit` and `marginSize` values migrate automatically when no newer value is set.
 
+The **Allowed Keys** list, the filter modes and the migration of old values all work on keyviz's own key names, so an `Allowed Keys` list can be pasted straight out of a keyviz config.
+
 ### Behaviour worth knowing
 
 A **held key stays visible** until you release it. Released keys expire individually after the **Fade Timeout** (default 5000 ms), and pressing a key again updates its count rather than adding a new cap. History mode keeps separate groups; replacement mode reuses one group. Left and right modifiers keep independent physical state.
@@ -137,6 +141,8 @@ A **held key stays visible** until you release it. Released keys expire individu
 ## Theming and portability
 
 `exportStyle` emits the entire theme as **native keyviz style JSON**, and `importStyle` applies one. The format is identical to keyviz's own, so a theme exported here loads into keyviz and vice versa — mouse settings ride along in the file but are never applied by this plugin.
+
+Since the format carries no branding, the JSON keys stay exactly as keyviz writes them — this plugin reads and writes that format rather than owning it.
 
 Imports are validated field by field (enums, ranges, colour format) and rejected as a whole rather than partially applied. Colours are CSS `#RRGGBB` or `#RRGGBBAA` — **alpha last**, as keyviz writes them.
 
@@ -147,7 +153,7 @@ Imports are validated field by field (enums, ranges, colour format) and rejected
 
 Mouse buttons, `Drag` and the wheel are off by default; enable **Show Mouse Events**. They then run through the *same* state machine as the keyboard, mirroring keyviz — so they join the row a held modifier started, and `Ctrl` + wheel is one `Ctrl + ScrollDown` row rather than a second one.
 
-One keyviz feature is deliberately **not** implemented: the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and the raw device nodes only carry relative deltas that are not pixels. Implementing it truthfully needs compositor support that does not exist yet; the measurements behind that conclusion are in [the parity notes](docs/keycap-style-parity.md#指针定位为什么没有光标涟漪).
+One keyviz feature this port deliberately skips is the **ripple and indicator anchored to the cursor**. A Wayland client cannot read the absolute pointer position, and the raw device nodes only carry relative deltas that are not pixels. Implementing it truthfully needs compositor support that does not exist yet; the measurements behind that conclusion are in [the parity notes](docs/keycap-style-parity.md#指针定位为什么没有光标涟漪).
 
 ## Troubleshooting
 

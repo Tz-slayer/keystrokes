@@ -57,10 +57,10 @@ import "core/keyvizStyle.js" as KeyvizStyle
     }
 
     SettingsCard {
-        SectionTitle { text: I18n.tr("Keyviz Color Presets"); icon: "palette" }
+        SectionTitle { text: I18n.tr("Color Presets"); icon: "palette" }
         KeyvizRow {
             label: I18n.tr("Color Preset")
-            description: I18n.tr("Keyviz's 14 upstream palettes. Applying one overwrites the primary, secondary, label and border colors.")
+            description: I18n.tr("keyviz's 14 upstream palettes. Applying one overwrites the primary, secondary, label and border colours.")
             DankDropdown {
                 id: paletteChoice
                 width: parent.width
@@ -160,7 +160,7 @@ import "core/keyvizStyle.js" as KeyvizStyle
             id: animationTypeSetting
             settingKey: "animationType"
             label: I18n.tr("Animation Style")
-            description: I18n.tr("Keyviz-style preset applied when keycaps enter and leave the overlay")
+            description: I18n.tr("keyviz-style preset applied when keycaps enter and leave the overlay")
             options: [
                 { label: I18n.tr("Fade"), value: "fade" },
                 { label: I18n.tr("Zoom"), value: "zoom" },
@@ -278,13 +278,13 @@ import "core/keyvizStyle.js" as KeyvizStyle
             id: groupBackgroundSetting
             settingKey: "groupBackground"
             label: I18n.tr("Show Group Panel")
-            description: I18n.tr("keyviz draws a rounded panel behind every group and keeps the overlay window itself transparent")
+            description: I18n.tr("Draw a rounded panel behind every group, keeping the overlay window itself transparent")
             defaultValue: true
         }
 
         KeyvizColorRow {
             label: I18n.tr("Group Panel Color")
-            description: I18n.tr("keyviz draws a rounded panel behind every group. Its default is #ffffff99 (white at 60%); the picker's opacity slider sets the alpha.")
+            description: I18n.tr("Colour of the rounded panel behind every group. Default is #ffffff99 (white at 60%); the picker's opacity slider sets the alpha.")
             KeyvizColorSwatch { settingKey: "groupBackgroundCustom"; description: I18n.tr("Group panel"); defaultValue: "#ffffff99" }
         }
     }

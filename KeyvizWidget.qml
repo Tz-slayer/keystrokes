@@ -33,7 +33,7 @@ PluginComponent {
     }
 
     ccWidgetIcon: "keyboard"
-    ccWidgetPrimaryText: I18n.tr("Keyviz")
+    ccWidgetPrimaryText: I18n.tr("Keystrokes")
     ccWidgetSecondaryText: daemon && daemon.enabled ? I18n.tr("Active") : I18n.tr("Disabled")
     ccWidgetIsActive: daemon ? daemon.enabled : false
     ccDetailHeight: 360
@@ -62,7 +62,7 @@ PluginComponent {
 
                 StyledText {
                     id: headerLabel
-                    text: I18n.tr("Keyviz")
+                    text: I18n.tr("Keystrokes")
                     font.pixelSize: Theme.fontSizeLarge
                     font.weight: Font.Medium
                     color: Theme.surfaceText

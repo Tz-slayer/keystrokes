@@ -1,11 +1,14 @@
-# Keyviz 非鼠标功能复刻与验证
+# keyviz 非鼠标功能复刻与验证
+
+本篇里的 **keyviz** 一律指上游项目 [mulaRahul/keyviz](https://github.com/mulaRahul/keyviz)；
+本插件自称 **keystrokes**，需要区分时写全名。
 
 基线：本地 `keyviz` 提交 `ee7fda1`，以 `key_style.ts`、`key_event.ts`、
 `settings/{general,appearance,keycap}.tsx`、`keycaps/*.tsx` 和 `key-overlay.tsx` 为准。
 
 ## 设置覆盖
 
-| Keyviz 设置组 | 插件实现 | 验证 |
+| keyviz 设置组 | 插件实现 | 验证 |
 |---|---|---|
 | appearance | 显示器、横/竖方向、九宫格位置、X/Y 边距及联动、五种动画、时长、四种皮肤 | 配置序列化测试、QML 编译、真实预览 |
 | layout | 图标、符号、次数角标、修饰键图标对齐 | QML 布局矩阵 |

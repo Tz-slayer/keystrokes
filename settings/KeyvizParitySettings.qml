@@ -35,7 +35,7 @@ Column {
         Quickshell.screens.map(screen => ({ label: screen.name + " (" + screen.width + "×" + screen.height + ")", value: screen.name })))
 
     SettingsCard {
-        SectionTitle { text: I18n.tr("Keyviz Filtering & History"); icon: "filter_alt" }
+        SectionTitle { text: I18n.tr("Filtering & History"); icon: "filter_alt" }
         SelectionSettingPlus {
             id: filterSetting
             settingKey: "eventFilter"
@@ -71,7 +71,7 @@ Column {
         }
     }
     SettingsCard {
-        SectionTitle { text: I18n.tr("Keyviz Display & Margins"); icon: "display_settings" }
+        SectionTitle { text: I18n.tr("Display & Margins"); icon: "display_settings" }
         SelectionSettingPlus {
             settingKey: "monitorName"; label: I18n.tr("Display")
             options: root.monitorOptions; defaultValue: OverlayLayout.followFocusValue()
@@ -100,7 +100,7 @@ Column {
         }
     }
     SettingsCard {
-        SectionTitle { text: I18n.tr("Keyviz Colors & Border"); icon: "palette" }
+        SectionTitle { text: I18n.tr("Colors & Border"); icon: "palette" }
         ToggleSettingPlus { settingKey: "useGradient"; label: I18n.tr("Gradient (Laptop / PBT)"); defaultValue: true }
         KeyvizColorRow {
             label: I18n.tr("Keycap Colors")
@@ -149,7 +149,7 @@ Column {
         }
         KeyvizValueSetting {
             settingKey: "borderRadius"; label: I18n.tr("Corner Radius")
-            description: I18n.tr("Keyviz ratio from 0 (square) to 1 (round).")
+            description: I18n.tr("Corner radius ratio from 0 (square) to 1 (round).")
             minimum: 0; maximum: 1; defaultValue: 0.5
         }
     }
