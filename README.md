@@ -257,6 +257,21 @@ nothing more than a rendering bug:
 - `tests/list-model-sync.test.cjs` — rows are updated in place, never re-created.
 - `tests/keycap-regression.test.cjs` — renders `Keycap`/`KeyvizGroup` with real Qt offscreen
   and asserts the geometry against keyviz's em measurements (must stay free of QWARNs).
+- `tests/group-frame.test.cjs` — the group panel encloses everything it paints (below).
+
+### The group panel is a background, never a clip
+
+keyviz draws a rounded panel behind every group. `ui/KeyvizGroup.qml` therefore sets no
+`clip` and masks nothing: a decoration that reaches past the row is drawn in full, and the
+panel is grown to cover it instead. `core/groupFrame.js` owns that arithmetic — how far the
+press-count badge sticks out of the top-right corner (a quarter of its own diameter), how far
+`KeycapSurface` paints past its box (spread ring, laptop drop shadow), and how much padding a
+corner of radius `r` needs before it stops biting into the content (`r − r/√2`). The keycap
+and the group read the same numbers, so the drawing and the box cannot drift apart.
+
+Enter/exit offsets may still carry a *fading* keycap past the panel for a moment, as they do
+in keyviz; that is a translation, not a clip, and reserving a whole font size for it would
+visibly unbalance the padding.
 
 ### Settings UI style
 

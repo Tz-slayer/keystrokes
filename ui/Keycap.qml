@@ -1,5 +1,6 @@
 import QtQuick
 import "../core/KeyIcons.js" as KeyIcons
+import "../core/groupFrame.js" as GroupFrame
 import "../core/keycapColors.js" as KeycapColors
 import "../core/keyvizMotion.js" as KeyvizMotion
 
@@ -493,10 +494,15 @@ Item {
     // translated a quarter of its own size outwards. keyviz shows it only
     // on the last key of the newest group, and only once that key has been
     // pressed more than once in a row.
+    // The size and the outset come from groupFrame.js, which is also what
+    // reserves room for them in the group's background panel: a badge drawn
+    // further out than the panel reserved for would be left outside it.
     Rectangle {
         id: pressBadge
+        objectName: "keyviz-press-count"
 
-        readonly property real d: keycap.fs * 0.75
+        readonly property real d: GroupFrame.badgeDiameter(keycap.fs)
+        readonly property real outset: GroupFrame.badgeOutset(keycap.fs)
         readonly property bool active: !keycap.isMinimal && keycap.pressCount > 1 && keycap.settings.showPressCount
 
         width: d
@@ -509,8 +515,8 @@ Item {
         scale: active ? 1 : 0.01
         anchors.top: parent.top
         anchors.right: parent.right
-        anchors.topMargin: -d / 4
-        anchors.rightMargin: -d / 4
+        anchors.topMargin: -outset
+        anchors.rightMargin: -outset
 
         Behavior on scale {
             enabled: keycap.settings.animType !== "none"

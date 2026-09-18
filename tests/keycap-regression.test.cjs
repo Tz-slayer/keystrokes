@@ -26,6 +26,7 @@ test('keycap geometry and alignment match Keyviz', () => {
 import QtQuick
 import QtTest
 import "ui"
+import "./core/groupFrame.js" as GroupFrame
 
 Item {
     id: overlayWindow
@@ -132,6 +133,36 @@ Item {
             verify(Math.abs(group.width-bare-32*0.8)<0.01);
             overlayWindow.groupBackground = false;
             group.visible = false;
+            overlayWindow.animDuration = 250;
+        }
+        function test_groupBackgroundEnclosesPressCount() {
+            overlayWindow.animType = "none";
+            overlayWindow.animDuration = 0;
+            overlayWindow.showPressCount = true;
+            overlayWindow.groupBackground = true;
+            group.visible = true;
+            group.keys = [{label:"Ctrl",count:7}];
+            wait(30);
+            const badge = findChild(group, "keyviz-press-count");
+            verify(badge !== null, "the press-count badge is part of the group");
+            for (const skin of ["laptop","lowprofile","pbt"]) {
+                for (const r of [0, 0.5, 1, 2]) {
+                    overlayWindow.styleParams = Object.assign({}, overlayWindow.styleParams, {type:skin, cornerRadius:r});
+                    wait(20);
+                    const at = badge.mapToItem(group, 0, 0);
+                    const box = {x:at.x, y:at.y, width:badge.width, height:badge.height};
+                    verify(GroupFrame.encloses(group.width, group.height, group.corner, box),
+                           "badge outside the panel: " + skin + " r=" + r + " at " + at.x + "," + at.y
+                           + " size " + group.width + "x" + group.height);
+                    verify(GroupFrame.encloses(group.width, group.height, group.corner, group.contentRect),
+                           "content outside the panel: " + skin + " r=" + r);
+                    verify(badge.visible, "the badge is on screen for " + skin);
+                }
+            }
+            group.keys = [];
+            group.visible = false;
+            overlayWindow.groupBackground = false;
+            overlayWindow.styleParams = {type: "pbt", baseColor: "#ffffff", secondaryColor: "#1a1a1a", textColor: "#000000", borderColor: "#1a1a1a", cornerRadius: 0.5, borderWidth: 2, gradient: false};
             overlayWindow.animDuration = 250;
         }
         function test_styleMatrix() {
