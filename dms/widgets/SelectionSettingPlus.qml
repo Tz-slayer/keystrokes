@@ -25,7 +25,11 @@ Item {
     function resetToDefault() {
         console.log(`[SelectionSettingPlus] Resetting ${settingKey}`);
         value = defaultValue;
-        dropdown.currentValue = root.valueToLabel[defaultValue] || defaultValue;
+        // The dropdown only speaks labels, so the reset has to go through the
+        // same map the binding uses. Writing the raw value worked only while
+        // every default happened to be truthy.
+        dropdown.currentValue = root.valueToLabel[defaultValue] !== undefined
+            ? root.valueToLabel[defaultValue] : defaultValue;
     }
 
     function loadValue() {
@@ -64,6 +68,15 @@ Item {
             else map[opt] = opt
         }
         return map
+    }
+
+    // `labelToValue[label] ?? label` and not `|| label`: an option may legitimately
+    // carry a falsy value, and `||` would then persist the option's display label
+    // ("Follow focused output") as the setting. `hasOwnProperty` keeps the
+    // lookup exact, so a label that happens to collide with Object.prototype
+    // ("constructor") cannot resolve to something that was never offered.
+    function valueForLabel(label) {
+        return Object.prototype.hasOwnProperty.call(labelToValue, label) ? labelToValue[label] : label
     }
 
     onValueChanged: {
@@ -176,7 +189,7 @@ Item {
             currentValue: root.valueToLabel[root.value] || root.value
             options: root.optionLabels
             onValueChanged: newValue => {
-                root.value = root.labelToValue[newValue] || newValue
+                root.value = root.valueForLabel(newValue)
             }
         }
 

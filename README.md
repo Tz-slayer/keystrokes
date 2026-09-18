@@ -68,8 +68,21 @@ The non-mouse port is written against the local Keyviz baseline `ee7fda1` (see
 record](docs/keycap-style-parity.md) lists what is 1:1 and what is not. Mouse behavior
 remains a separate, existing extension.
 
+### Display output
+
 The default **Focused Display (Auto)** output follows DMS's compositor-aware
 focused screen. Selecting a named display pins the overlay to that output.
+
+Automatic mode is stored as a *sentinel* string rather than an empty value.
+DMS's `SelectionSettingPlus` resolves a chosen label with
+`labelToValue[label] || label`, and an empty-string option value is falsy, so
+that spelling silently persisted the option's own label — leaving the overlay
+with a `monitorName` that was neither automatic nor a real output, pinned to one
+display with the setting unable to recover. A truthy sentinel round-trips, and
+the legacy empty spelling is still read as automatic so existing settings keep
+working. The rule lives in one place (`core/overlayLayout.js`), which both the
+overlay and the settings page call; `tests/follow-focus.test.cjs` drives the
+round trip through the real state machine.
 
 Switching workspaces must not disturb the overlay, so the output is only
 changed when the compositor can actually name the focused output and that name
@@ -243,7 +256,7 @@ three DMS entry points at the repository root may import `qs.*`.
 | `tests/helpers/` | the vm loader that runs `core/*.js` the way QML does | — |
 | `tests/`, `docs/`, `fonts/` | Node/Qt tests, parity records, bundled Inter | — |
 
-Five tests hold the structure together; each one exists because its failure once looked like
+Seven tests hold the structure together; each one exists because its failure once looked like
 nothing more than a rendering bug:
 
 - `tests/layering.test.cjs` — `core/` and `ui/` must not reference `qs.*`, `Theme`,
@@ -258,6 +271,8 @@ nothing more than a rendering bug:
 - `tests/keycap-regression.test.cjs` — renders `Keycap`/`KeyvizGroup` with real Qt offscreen
   and asserts the geometry against keyviz's em measurements (must stay free of QWARNs).
 - `tests/group-frame.test.cjs` — the group panel encloses everything it paints (below).
+- `tests/follow-focus.test.cjs` — drives the overlay's screen state machine in Qt (see
+  [Display output](#display-output)) so the automatic mode cannot silently stop following.
 
 ### The group panel is a background, never a clip
 

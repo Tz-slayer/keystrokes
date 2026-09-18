@@ -43,11 +43,13 @@ PanelWindow {
     readonly property string alignment: config.position
 
     readonly property var availableScreenNames: Quickshell.screens.map(candidate => candidate.name)
-    // Both "" (the default) and the explicit sentinel mean "the screen holding
-    // the focused workspace". The value is an OUTPUT name, so switching
-    // workspaces inside one output does not move the overlay.
-    readonly property bool followsFocus: config.monitorName === ""
-        || config.monitorName === OverlayLayout.followFocusValue()
+    // Automatic mode: the surface sits on whatever output holds the focused
+    // workspace. The value is an OUTPUT name, so switching workspaces inside one
+    // output does not move the overlay. The rule itself lives in
+    // core/overlayLayout.js -- the settings page asks the same function to render
+    // "Display", and the second copy that used to live here is what let the
+    // dropdown and the overlay disagree about what counted as automatic.
+    readonly property bool followsFocus: OverlayLayout.followsFocus(config.monitorName)
     // "" means "the compositor cannot name the focused output right now": hold
     // the output we are already on instead of guessing. See the note on
     // OverlayLayout.focusedTarget -- a workspace switch can drop the focused

@@ -18,11 +18,19 @@ Column {
         root.marginsLinked = linked;
         if (linked) marginYSetting.value = marginXSetting.value;
     }
+    // The sentinel -- not "" -- is what the dropdown must write. Every widget on
+    // this page pushes its choice back as `labelToValue[label] || label`, and an
+    // empty string is falsy, so a `value: ""` entry persisted its own *label*
+    // ("Follow focused output") instead of the sentinel. The overlay then saw an
+    // unknown monitorName, which is not automatic, so it pinned itself to one
+    // output and the mode looked broken until the plugin was reloaded. The
+    // legacy "" spelling still resolves as automatic in overlayLayout.followsFocus,
+    // so settings saved by an older build keep working.
     // "" follows the SCREEN of the focused workspace (switching workspaces inside
     // one output does not move the overlay). "@primary" pins it to the first
     // output for anyone who wants no motion at all -- that is also what keyviz
     // does, since it pins appearance.monitor to monitors[0] (appearance.tsx:28-29).
-    readonly property var monitorOptions: [{ label: I18n.tr("Follow focused output"), value: "" },
+    readonly property var monitorOptions: [{ label: I18n.tr("Follow focused output"), value: OverlayLayout.followFocusValue() },
         { label: I18n.tr("Primary Display (never moves)"), value: OverlayLayout.primaryValue() }].concat(
         Quickshell.screens.map(screen => ({ label: screen.name + " (" + screen.width + "×" + screen.height + ")", value: screen.name })))
 
@@ -66,7 +74,7 @@ Column {
         SectionTitle { text: I18n.tr("Keyviz Display & Margins"); icon: "display_settings" }
         SelectionSettingPlus {
             settingKey: "monitorName"; label: I18n.tr("Display")
-            options: root.monitorOptions; defaultValue: ""
+            options: root.monitorOptions; defaultValue: OverlayLayout.followFocusValue()
         }
         KeyvizRow {
             label: I18n.tr("Link horizontal and vertical margins")

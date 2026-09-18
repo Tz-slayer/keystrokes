@@ -2,7 +2,9 @@
 // Positions are absolute within one output, so removing a history item cannot
 // produce a second, compensating movement from a resized parent container.
 // Sentinel `monitorName` values. Both mean "follow the screen that holds the
-// focused workspace"; "" is the default so existing settings keep working.
+// focused workspace". "" is the historical spelling and stays supported so
+// existing installs keep working, but the settings dropdown now writes
+// `followFocusValue()` -- see the note on `followsFocus` for why.
 function followFocusValue() {
     return "@focused";
 }
@@ -10,6 +12,29 @@ function followFocusValue() {
 // Sentinel meaning "the first output" -- no motion, ever.
 function primaryValue() {
     return "@primary";
+}
+
+// Why "" must not be what the settings dropdown writes: SelectionSettingPlus
+// pushes a choice back through `labelToValue[label]`, and that lookup used to be
+// spelled with `||` (dms/widgets/SelectionSettingPlus.qml). An empty-string value
+// is falsy, so re-selecting the option silently persisted its *label* -- "Follow
+// focused output" -- instead of the sentinel. The overlay then read a monitorName
+// that was neither automatic nor an output name, so it pinned itself to the
+// first output and stopped following focus; toggling the setting again could not
+// recover it because the same falsy value was dropped on the way back. A truthy
+// sentinel survives the round trip, and the widget now resolves the label with
+// an exact lookup rather than `||`, so no option value can leak its label again.
+//
+// `followsFocus` is the one place that decides what "follow the focused output"
+// means. Both the overlay and the settings page ask it, so the two cannot drift
+// apart -- a duplicated rule is exactly what let "Display" store a value the
+// overlay did not recognise as automatic.
+//
+// The legacy "" spelling is accepted so a settings file written before this
+// sentinel existed still reads as automatic.
+function followsFocus(configured) {
+    return configured === undefined || configured === null
+        || configured === "" || configured === followFocusValue();
 }
 
 // The automatic value tracks the SCREEN of the focused workspace, not the
@@ -22,7 +47,9 @@ function screenName(configured, focused, available) {
     const names = available || [];
     if (configured === primaryValue())
         return names.length > 0 ? names[0] : "";
-    if (configured && names.indexOf(configured) !== -1)
+    // Both automatic spellings resolve identically; anything that is not the
+    // primary sentinel and not an output we own falls through to focus.
+    if (configured && configured !== followFocusValue() && names.indexOf(configured) !== -1)
         return configured;
     return focused && names.indexOf(focused) !== -1
         ? focused : (names.length > 0 ? names[0] : "");
@@ -51,8 +78,13 @@ function crossOffset(alignment, startWord, endWord, available, size) {
 // is indistinguishable from a real move to the first output. A workspace
 // switch can drop the focused output for a moment, and that used to yank the
 // window (and rebuild every keycap) onto another monitor.
-function focusedTarget(followsFocus, configured, focusedName, available) {
-    if (!followsFocus)
+// `configured` decides on its own whether this is automatic: the first
+// argument is only the caller's own reading of it, kept so the signature stays
+// backwards compatible. Deriving it here means a caller that computed the flag
+// from a different rule (or from a stale value) cannot silently pin the overlay
+// to the wrong output -- which is what the retired falsy sentinel did.
+function focusedTarget(callerSaysFollows, configured, focusedName, available) {
+    if (!followsFocus(configured))
         return screenName(configured, "", available);
     const names = available || [];
     if (focusedName && names.indexOf(focusedName) !== -1)
