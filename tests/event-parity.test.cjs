@@ -6,6 +6,9 @@ const config = { eventFilter: 'none', allowedKeys: ['Ctrl', 'Super', 'Alt'], sho
 const plain = value => JSON.parse(JSON.stringify(value));
 const labels = state => plain(state.groups.map(group => group.keys.map(key => key.label)));
 function down(state, key, now = 0, overrides = {}) { return api.press(state, key, now, { ...config, ...overrides }); }
+function tap(state, key, now = 0, overrides = {}) {
+  return api.release(down(state, key, now, overrides), key, now + 1);
+}
 function freeze(value) { Object.values(value).forEach(item => { if (item && typeof item === 'object') freeze(item); }); return Object.freeze(value); }
 
 // keyviz decides the gate from `pressedKeys[0]` alone. Here it asks whether the
@@ -491,4 +494,113 @@ test('releasing a key that was never held leaves the groups untouched', () => {
   const next = api.release(state, 'Drag', 1);
   assert.equal(next, state);
   assert.deepEqual(labels(next), [['A']]);
+});
+
+// ── the deferred modifier ─────────────────────────────────────────────────────
+//
+// A modifier pressed with nothing else down is reported by the kernel as one
+// event, but it is the start of either a repeat (`Ctrl` tapped again -> count
+// two) or a chord (`Ctrl+C` -> one each), and those want opposite counts. The
+// press is therefore provisional: shown, held open, and decided by whatever
+// comes next. These tests pin that mechanism, which nothing else can supply --
+// remove it and `Ctrl` tapped three times then `Ctrl+C` reads as four.
+test('a lone modifier tapped repeatedly counts up on one row', () => {
+  let state = tap(api.initialState(), 'Ctrl', 0);
+  state = tap(state, 'Ctrl', 2);
+  state = tap(state, 'Ctrl', 4);
+  assert.deepEqual(labels(state), [['Ctrl']]);
+  assert.equal(state.groups[0].keys[0].count, 3);
+  assert.equal(state.groups.length, 1);
+});
+
+test('a chord opened over a repeated modifier counts one each', () => {
+  // The reported bug: tap Ctrl three times, then press Ctrl+C. Every key of the
+  // shortcut was pressed once, so the row is Ctrl×1+C×1 -- not Ctrl×4.
+  let state = tap(tap(tap(api.initialState(), 'Ctrl', 0), 'Ctrl', 2), 'Ctrl', 4);
+  state = api.press(state, 'Ctrl', 6, config);
+  state = api.press(state, 'C', 7, config);
+  assert.deepEqual(labels(state), [['Ctrl', 'C']]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
+    'the taps were a separate gesture and must not count into the chord');
+  assert.equal(state.groups[0].uid, 0, 'replacement mode shows one row either way');
+});
+
+test('a chord retyped counts every key of it', () => {
+  const chord = state => {
+    let next = api.press(state, 'Ctrl', 0, config);
+    next = api.press(next, 'C', 0, config);
+    next = api.release(next, 'C', 0);
+    return api.release(next, 'Ctrl', 0);
+  };
+  let state = chord(api.initialState());
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+  state = chord(state);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [2, 2],
+    'Ctrl+C twice means both keys were pressed twice');
+});
+
+test('a different shortcut sharing the modifier starts its own count', () => {
+  let state = api.press(api.initialState(), 'Ctrl', 0, config);
+  state = api.press(state, 'C', 1, config);
+  state = api.release(state, 'C', 2);
+  state = api.release(state, 'Ctrl', 3);
+
+  // Ctrl+V, not a second Ctrl+C: the count carries over for the shared
+  // modifier but the keystroke is a different one, so C does not return.
+  state = api.press(state, 'Ctrl', 4, config);
+  state = api.press(state, 'V', 5, config);
+  assert.deepEqual(labels(state), [['Ctrl', 'V']]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+});
+
+test('a released member lingers while a live chord is still in progress', () => {
+  // Ctrl+C+V: the user lets go of C to reach V. C stays on the row, because
+  // dropping it the instant it is released would erase the gesture in progress.
+  let state = api.press(api.initialState(), 'Ctrl', 0, config);
+  state = api.press(state, 'C', 1, config);
+  state = api.release(state, 'C', 2);
+  state = api.press(state, 'V', 3, config);
+  assert.deepEqual(labels(state), [['Ctrl', 'C', 'V']]);
+
+  // Repressing V inside the live chord prunes the member that has gone up.
+  state = api.release(state, 'V', 4);
+  state = api.press(state, 'V', 5, config);
+  assert.deepEqual(labels(state), [['Ctrl', 'V']]);
+  assert.equal(state.groups[0].keys[1].count, 2);
+});
+
+test('the deferred press is shown while it is undecided', () => {
+  // The overlay cannot wait: a keycap has to appear the moment the key goes
+  // down. Ctrl is therefore drawn at its provisional count straight away, and
+  // only another key can say whether that was right.
+  const state = api.press(api.initialState(), 'Ctrl', 0, config);
+  assert.deepEqual(labels(state), [['Ctrl']]);
+  assert.equal(state.groups[0].keys[0].count, 1);
+
+  const repeated = api.press(api.release(state, 'Ctrl', 1), 'Ctrl', 2, config);
+  assert.equal(repeated.groups[0].keys[0].count, 2);
+});
+
+test('releasing a deferred key does not settle it', () => {
+  // Tapping Ctrl releases it, and so does typing Ctrl+C. The release carries no
+  // information, so the question has to outlive it -- otherwise the third tap
+  // of Ctrl,Ctrl,Ctrl,C would be counted as a repeat instead of a chord.
+  let state = api.press(api.initialState(), 'Ctrl', 0, config);
+  state = api.release(state, 'Ctrl', 1);
+  state = api.press(state, 'Ctrl', 2, config);
+  state = api.release(state, 'Ctrl', 3);
+  state = api.press(state, 'Ctrl', 4, config);
+  assert.equal(state.groups[0].keys[0].count, 3, 'three taps, three presses');
+
+  state = api.press(state, 'C', 5, config);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
+    'and the chord that follows still counts one each');
+});
+
+test('a modifier filter still admits a deferred modifier', () => {
+  const cfg = {...config, eventFilter: 'modifiers'};
+  let state = api.press(api.initialState(), 'Ctrl', 0, cfg);
+  state = api.press(state, 'ScrollDown', 1, cfg);
+  assert.deepEqual(labels(state), [['Ctrl', 'ScrollDown']]);
+  assert.equal(state.groups.length, 1, 'the wheel must not open a second row');
 });
