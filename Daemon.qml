@@ -425,20 +425,35 @@ print(json.dumps(devs))
 
     // Press/release a label (a key name or a mouse keycap such as "ScrollDown")
     // through the state machine, exactly as the keyboard path does.
+    // The single door every non-keyboard source comes through -- mouse buttons,
+    // the wheel, a drag, and the `test` preview. Tapping them here (rather than
+    // in each caller) is what makes `trace` cover a whole session instead of
+    // only the keyboard: the question it exists to answer, "is this keycap
+    // arriving twice", is exactly about sources that bypass the evdev path.
     function pressLabel(label) {
         if (!label) return;
-        root.applyKeyboard(Events.press(root.keyboardState, label, Date.now(), root.eventConfig));
+        const next = Events.press(root.keyboardState, label, Date.now(), root.eventConfig);
+        root.traceRecord("down " + label + "  (label path)  held=[" + next.heldKeys.join(",") + "]"
+            + "  row=[" + root.rowSnapshot(next) + "]"
+            + (next === root.keyboardState ? "  (ignored: already held)" : ""));
+        root.applyKeyboard(next);
     }
 
     function releaseLabel(label) {
         if (!label || root.keyboardState.heldKeys.indexOf(label) === -1) return;
-        root.applyKeyboard(Events.release(root.keyboardState, label, Date.now()));
+        const next = Events.release(root.keyboardState, label, Date.now());
+        root.traceRecord("up   " + label + "  (label path)  held=[" + next.heldKeys.join(",") + "]"
+            + "  row=[" + root.rowSnapshot(next) + "]");
+        root.applyKeyboard(next);
     }
 
     // The drag replaces the held button instead of leaving it on screen.
     function dropLabel(label) {
         if (!label) return;
-        root.applyKeyboard(Events.dropKey(root.keyboardState, label));
+        const next = Events.dropKey(root.keyboardState, label);
+        root.traceRecord("drop " + label + "  held=[" + next.heldKeys.join(",") + "]"
+            + "  row=[" + root.rowSnapshot(next) + "]");
+        root.applyKeyboard(next);
     }
 
     // Hold a set of keycaps for a moment so the press animation can be seen
@@ -468,6 +483,15 @@ print(json.dumps(devs))
     function traceRecord(line) {
         if (traceTimer.running || root.traceLog.length > 0)
             root.traceLog = root.traceLog.concat([line]);
+    }
+
+    // The last row as `Ctrlx2+Cx1`, for the trace lines. Reading it off the
+    // state rather than the ListModel keeps the log free of anything the
+    // overlay may have already aged out.
+    function rowSnapshot(state) {
+        if (!state.groups.length) return "";
+        return state.groups[state.groups.length - 1].keys
+            .map(key => key.label + "x" + key.count).join("+");
     }
 
     // keyviz: key_event.ts SCROLL_LINGER_MS = 300. The wheel has no press/release
@@ -545,8 +569,7 @@ print(json.dumps(devs))
         const next = Events.press(root.keyboardState, label, Date.now(), root.eventConfig);
         root.traceRecord("down " + keyName + " -> " + label
             + "  held=[" + next.heldKeys.join(",") + "]"
-            + "  row=[" + (next.groups.length ? next.groups[next.groups.length - 1].keys
-                .map(k => k.label + "x" + k.count).join("+") : "") + "]"
+            + "  row=[" + root.rowSnapshot(next) + "]"
             + (next === root.keyboardState ? "  (ignored: already held)" : ""));
         root.applyKeyboard(next);
     }
@@ -557,8 +580,7 @@ print(json.dumps(devs))
         const next = Events.release(root.keyboardState, label, Date.now());
         root.traceRecord("up   " + keyName + " -> " + label
             + "  held=[" + next.heldKeys.join(",") + "]"
-            + "  row=[" + (next.groups.length ? next.groups[next.groups.length - 1].keys
-                .map(k => k.label + "x" + k.count).join("+") : "") + "]");
+            + "  row=[" + root.rowSnapshot(next) + "]");
         root.applyKeyboard(next);
     }
 
