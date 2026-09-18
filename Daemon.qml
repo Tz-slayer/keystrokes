@@ -6,8 +6,8 @@ import qs.Services
 import qs.Widgets
 import qs.Modules.Plugins
 import "core/keyMapper.js" as KeyMapper
-import "core/keyvizStyle.js" as KeyvizStyle
-import "core/keyvizEvents.js" as KeyvizEvents
+import "core/keyStyle.js" as KeyStyle
+import "core/events.js" as Events
 import "core/keycapColors.js" as KeycapColors
 import "core/inputParse.js" as InputParse
 import "ui"
@@ -50,18 +50,18 @@ PluginComponent {
         // Each keycap is briefly "held" so the keyviz press animation plays too.
         function test(): string {
             if (!root.enabled) root.saveSetting("enabled", true);
-            let state = KeyvizEvents.initialState();
+            let state = Events.initialState();
             ["Ctrl", "Shift", "A"].forEach(label => {
-                state = KeyvizEvents.press(state, label, Date.now(), root.eventConfig);
+                state = Events.press(state, label, Date.now(), root.eventConfig);
             });
             root.applyKeyboard(state);
             previewReleaseTimer.restart();
             return "SUCCESS";
         }
-        function exportStyle(): string { return JSON.stringify(KeyvizStyle.exportStyle(root.pluginData), null, 2); }
+        function exportStyle(): string { return JSON.stringify(KeyStyle.exportStyle(root.pluginData), null, 2); }
         function importStyle(json: string): string {
             try {
-                const values = KeyvizStyle.importStyle(JSON.parse(json));
+                const values = KeyStyle.importStyle(JSON.parse(json));
                 Object.keys(values).forEach(key => root.saveSetting(key, values[key]));
                 return "SUCCESS";
             } catch (error) { return "ERROR: " + error.message; }
@@ -69,14 +69,14 @@ PluginComponent {
 
     }
 
-    readonly property var config: KeyvizStyle.settings(root.pluginData)
-    property var keyboardState: KeyvizEvents.initialState()
+    readonly property var config: KeyStyle.settings(root.pluginData)
+    property var keyboardState: Events.initialState()
     property var physicalKeys: []
     readonly property var eventConfig: Object.assign({}, config, {allowedKeys: parseKeys(config.allowedKeys), displayLabel: key => root.displayKeyLabel(key)})
 
     // Configurable settings
     // Every fallback below must equal the matching `defaultValue` in
-    // KeyvizSettings.qml, otherwise a setting the user never touched renders one
+    // Settings.qml, otherwise a setting the user never touched renders one
     // way and displays another. The values themselves follow keyviz's own
     // defaults (src/stores/key_style.ts, src/stores/key_event.ts).
     readonly property bool enabled: root.pluginData.enabled ?? true
@@ -100,7 +100,7 @@ PluginComponent {
     function eventAllowed(label) {
         const held = root.heldKeys.indexOf(label) !== -1
             ? root.heldKeys : root.heldKeys.concat([label]);
-        return KeyvizEvents.shouldShow(root.eventFilter, held, root.allowedKeys);
+        return Events.shouldShow(root.eventFilter, held, root.allowedKeys);
     }
     readonly property string animationType: root.config.animationType
     readonly property int animationDuration: root.config.animationDuration
@@ -113,7 +113,7 @@ PluginComponent {
     // ship `showOnlyModifiers` for this; the gate below supersedes it (it also
     // covers combinations and press order), so the old key is only read for the
     // migration. Typing mode is only reachable with no filter, mirroring
-    // keyvizStyle.js's migration.
+    // settings.js's migration.
     readonly property string eventFilter: {
         if (root.pluginData.eventFilter !== undefined)
             return root.pluginData.eventFilter;
@@ -292,17 +292,17 @@ if os.path.exists('/proc/bus/input/devices'):
 print(json.dumps(devs))
 `;
         root.devicesScanning = true;
-        Proc.runCommand("keyviz.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
+        Proc.runCommand("keystrokes.scanDevices", ["python3", "-c", script], (stdout, exitCode) => {
             root.devicesScanning = false;
             if (exitCode !== 0) {
-                console.warn("[Keyviz] scanDevices command failed with exit code:", exitCode, stdout);
+                console.warn("[Keystrokes] scanDevices command failed with exit code:", exitCode, stdout);
                 return;
             }
             try {
                 root.deviceOptions = JSON.parse(stdout.trim())
                     .map(entry => ({label: entry[0], value: entry[1]}));
             } catch (e) {
-                console.warn("[Keyviz] Failed to parse scanDevices output:", e, stdout);
+                console.warn("[Keystrokes] Failed to parse scanDevices output:", e, stdout);
                 root.deviceOptions = [];
             }
         });
@@ -323,12 +323,12 @@ print(json.dumps(devs))
         // The old process will not report its releases: drop held state so a
         // key can never stay stuck "pressed" across a device switch.
         root.physicalKeys = [];
-        root.applyKeyboard(KeyvizEvents.initialState());
+        root.applyKeyboard(Events.initialState());
         inputRestartTimer.restart();
     }
 
     onEnabledChanged: {
-        if (!root.enabled) root.applyKeyboard(KeyvizEvents.initialState());
+        if (!root.enabled) root.applyKeyboard(Events.initialState());
     }
 
     Timer {
@@ -387,18 +387,18 @@ print(json.dumps(devs))
     // through the state machine, exactly as the keyboard path does.
     function pressLabel(label) {
         if (!label) return;
-        root.applyKeyboard(KeyvizEvents.press(root.keyboardState, label, Date.now(), root.eventConfig));
+        root.applyKeyboard(Events.press(root.keyboardState, label, Date.now(), root.eventConfig));
     }
 
     function releaseLabel(label) {
         if (!label || root.keyboardState.heldKeys.indexOf(label) === -1) return;
-        root.applyKeyboard(KeyvizEvents.release(root.keyboardState, label, Date.now()));
+        root.applyKeyboard(Events.release(root.keyboardState, label, Date.now()));
     }
 
     // The drag replaces the held button instead of leaving it on screen.
     function dropLabel(label) {
         if (!label) return;
-        root.applyKeyboard(KeyvizEvents.dropKey(root.keyboardState, label));
+        root.applyKeyboard(Events.dropKey(root.keyboardState, label));
     }
 
     // Hold a set of keycaps for a moment so the press animation can be seen
@@ -408,7 +408,7 @@ print(json.dumps(devs))
         interval: 420
         onTriggered: {
             let state = root.keyboardState;
-            state.heldKeys.forEach(label => { state = KeyvizEvents.release(state, label, Date.now()); });
+            state.heldKeys.forEach(label => { state = Events.release(state, label, Date.now()); });
             root.applyKeyboard(state);
         }
     }
@@ -435,7 +435,7 @@ print(json.dumps(devs))
     //   - Ctrl-then-A passes, because the first pressed key is a modifier
     //   - A-then-Ctrl does NOT, because A was pressed first
     //   - Shift counts, so Shift+A is a shortcut
-    // See keyvizEvents.shouldShow for the upstream derivation.
+    // See events.shouldShow for the upstream derivation.
     function parseKeys(value) {
         return String(value || "").split(",").map(k => k.trim()).filter(k => k !== "")
             .map(k => k === "Comma" ? "," : k);
@@ -462,17 +462,17 @@ print(json.dumps(devs))
         const shortcut = root.parseKeys(config.toggleShortcut);
         if (shortcut.length && shortcut.length === labels.length && shortcut.every((key, index) => key === labels[index])) {
             root.saveSetting("enabled", !root.enabled);
-            root.applyKeyboard(KeyvizEvents.initialState());
+            root.applyKeyboard(Events.initialState());
             return;
         }
         if (!root.enabled || !label) return;
-        root.applyKeyboard(KeyvizEvents.press(root.keyboardState, keyName, Date.now(), root.eventConfig));
+        root.applyKeyboard(Events.press(root.keyboardState, keyName, Date.now(), root.eventConfig));
     }
 
     function handleKeyRelease(keyName) {
         root.physicalKeys = root.physicalKeys.filter(key => key !== keyName);
         const label = root.displayKeyLabel(keyName);
-        root.applyKeyboard(KeyvizEvents.release(root.keyboardState, keyName, Date.now()));
+        root.applyKeyboard(Events.release(root.keyboardState, keyName, Date.now()));
     }
 
     Timer {
@@ -480,7 +480,7 @@ print(json.dumps(devs))
         repeat: true
         running: root.enabled && root.keyboardState.groups.length > 0
         onTriggered: {
-            const next = KeyvizEvents.tick(root.keyboardState, Date.now(), root.eventConfig);
+            const next = Events.tick(root.keyboardState, Date.now(), root.eventConfig);
             if (next !== root.keyboardState) root.applyKeyboard(next);
         }
     }
@@ -595,7 +595,7 @@ print(json.dumps(devs))
                 cmd = ["libinput", "debug-events", "--show-keycodes", "--device", selectedDevicePath];
             else
                 cmd = ["evtest", selectedDevicePath];
-            console.log("[Keyviz] Starting input process:", JSON.stringify(cmd));
+            console.log("[Keystrokes] Starting input process:", JSON.stringify(cmd));
             return cmd;
         }
         running: !root.inputToolMissing
@@ -642,7 +642,7 @@ print(json.dumps(devs))
     }
 
     // Floating overlay window instance
-    KeyvizOverlay {
+    Overlay {
         id: overlay
         daemon: root
         // The overlay layer is shell-agnostic, so the two compositor facts it
@@ -670,7 +670,7 @@ print(json.dumps(devs))
             pluginService.savePluginData(pluginId, key, value);
             pluginData = Object.assign({}, pluginData, {[key]: value});
         } catch(e) {
-            console.warn("[Keyviz] Failed to save setting:", key, e);
+            console.warn("[Keystrokes] Failed to save setting:", key, e);
         }
     }
 }

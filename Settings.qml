@@ -6,7 +6,7 @@ import qs.Services
 import qs.Widgets
 import "dms/widgets"
 import "settings"
-import "core/keyvizStyle.js" as KeyvizStyle
+import "core/keyStyle.js" as KeyStyle
 
     PluginSettings {
         id: root
@@ -44,10 +44,10 @@ import "core/keyvizStyle.js" as KeyvizStyle
     }
 
     // DankDropdown only speaks labels, so the palette name maps back to the
-    // index KeyvizStyle.palette() takes.
+    // index KeyStyle.palette() takes.
     function paletteIndex(name) {
-        for (let i = 0; i < KeyvizStyle.COLOR_SCHEMES.length; i++)
-            if (KeyvizStyle.COLOR_SCHEMES[i].name === name) return i;
+        for (let i = 0; i < KeyStyle.COLOR_SCHEMES.length; i++)
+            if (KeyStyle.COLOR_SCHEMES[i].name === name) return i;
         return 0;
     }
 
@@ -58,27 +58,27 @@ import "core/keyvizStyle.js" as KeyvizStyle
 
     SettingsCard {
         SectionTitle { text: I18n.tr("Color Presets"); icon: "palette" }
-        KeyvizRow {
+        Row {
             label: I18n.tr("Color Preset")
             description: I18n.tr("keyviz's 14 upstream palettes. Applying one overwrites the primary, secondary, label and border colours.")
             DankDropdown {
                 id: paletteChoice
                 width: parent.width
-                options: KeyvizStyle.COLOR_SCHEMES.map(scheme => scheme.name)
-                currentValue: KeyvizStyle.COLOR_SCHEMES[0].name
+                options: KeyStyle.COLOR_SCHEMES.map(scheme => scheme.name)
+                currentValue: KeyStyle.COLOR_SCHEMES[0].name
             }
             Row {
                 spacing: Theme.spacingS
                 DankButton {
                     text: I18n.tr("Apply Palette")
-                    onClicked: root.applyValues(KeyvizStyle.palette(root.paletteIndex(paletteChoice.currentValue)))
+                    onClicked: root.applyValues(KeyStyle.palette(root.paletteIndex(paletteChoice.currentValue)))
                 }
-                DankButton { text: I18n.tr("Randomize Style"); onClicked: root.applyValues(KeyvizStyle.randomStyle(root.daemon ? root.daemon.pluginData : {})) }
+                DankButton { text: I18n.tr("Randomize Style"); onClicked: root.applyValues(KeyStyle.randomStyle(root.daemon ? root.daemon.pluginData : {})) }
             }
         }
     }
 
-    KeyvizParitySettings {}
+    ParitySettings {}
 
     SettingsCard {
         id: generalSection
@@ -94,7 +94,7 @@ import "core/keyvizStyle.js" as KeyvizStyle
             defaultValue: true
         }
 
-        KeyvizValueSetting {
+        ValueSetting {
             id: fadeTimeoutSetting
             settingKey: "fadeTimeout"
             label: I18n.tr("Fade Timeout")
@@ -104,7 +104,7 @@ import "core/keyvizStyle.js" as KeyvizStyle
             defaultValue: 5000
         }
 
-        KeyvizValueSetting {
+        ValueSetting {
             id: fontSizeSetting
             settingKey: "fontSize"
             label: I18n.tr("Font Size")
@@ -282,10 +282,10 @@ import "core/keyvizStyle.js" as KeyvizStyle
             defaultValue: true
         }
 
-        KeyvizColorRow {
+        ColorRow {
             label: I18n.tr("Group Panel Color")
             description: I18n.tr("Colour of the rounded panel behind every group. Default is #ffffff99 (white at 60%); the picker's opacity slider sets the alpha.")
-            KeyvizColorSwatch { settingKey: "groupBackgroundCustom"; description: I18n.tr("Group panel"); defaultValue: "#ffffff99" }
+            ColorSwatch { settingKey: "groupBackgroundCustom"; description: I18n.tr("Group panel"); defaultValue: "#ffffff99" }
         }
     }
 

@@ -76,7 +76,7 @@ function importStyle(value) {
             output[key] = validate(key, v);
         });
     });
-    if (value.mouse && typeof value.mouse === "object" && !Array.isArray(value.mouse)) output.keyvizMouseStyle = value.mouse;
+    if (value.mouse && typeof value.mouse === "object" && !Array.isArray(value.mouse)) output.mouseStyle = value.mouse;
     return output;
 }
 function exportStyle(data) {
@@ -98,7 +98,7 @@ function exportStyle(data) {
     // applying them to this plugin, or include upstream defaults for portability
     // (key_style.ts createKeyStyleStore): a file this produces imports cleanly
     // into keyviz itself, which only checks that the eight sections exist.
-    output.mouse = data && data.keyvizMouseStyle || {showClicks: false, size: 150, color: "#009dff", keepHighlight: false,
+    output.mouse = data && data.mouseStyle || {showClicks: false, size: 150, color: "#009dff", keepHighlight: false,
         showIndicator: true, keepIndicator: true, indicatorSize: 50, indicatorOffsetX: 50, indicatorOffsetY: 50};
     return output;
 }

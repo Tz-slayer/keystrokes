@@ -2,7 +2,7 @@
     "name": "dms-keystrokes",
     "version": "1.2.0",
     "private": true,
-    "description": "Keyviz-style keystroke overlay for DankMaterialShell",
+    "description": "Keystroke and mouse overlay for DankMaterialShell, ported from keyviz",
     "scripts": {
         "test": "node --test tests/*.test.cjs"
     }

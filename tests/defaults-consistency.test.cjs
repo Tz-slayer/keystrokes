@@ -1,7 +1,7 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {loadCore} = require('./helpers/load.cjs');
-const style = loadCore(['keyvizStyle.js']);
+const style = loadCore(['keyStyle.js']);
 const plain = value => JSON.parse(JSON.stringify(value));
 
 test('Keyviz defaults and native JSON roundtrip preserve every nonmouse field', () => {
@@ -13,7 +13,7 @@ test('Keyviz defaults and native JSON roundtrip preserve every nonmouse field', 
     assert.equal(json.appearance.animationDuration,0.25);
     assert.equal(json.appearance.alignment,'bottom-center');
     const imported = style.importStyle(json);
-    for (const [key,value] of Object.entries(imported)) if (key !== "keyvizMouseStyle") assert.equal(value,defaults[key],key);
+    for (const [key,value] of Object.entries(imported)) if (key !== "mouseStyle") assert.equal(value,defaults[key],key);
 });
 test('imports reject incomplete or invalid styles before returning settings', () => {
     for (const value of [null,[],{}, {text:{size:32}}]) assert.throws(()=>style.importStyle(value));
@@ -35,7 +35,7 @@ test('custom style values, alpha colors and fractional border widths roundtrip',
     const imported=style.importStyle(style.exportStyle(source));
     for(const [key,value] of Object.entries(source)) assert.equal(imported[key],value,key);
     assert.equal(style.exportStyle({}).mouse.size,150);
-    assert.deepEqual(plain(style.exportStyle({keyvizMouseStyle:{size:99}}).mouse),{size:99});
+    assert.deepEqual(plain(style.exportStyle({mouseStyle:{size:99}}).mouse),{size:99});
 });
 test('palette/randomization applies upstream normal and modifier color branches', () => {
     assert.equal(style.palette(0).capColor,'#f8f8f8');assert.throws(()=>style.palette(999));

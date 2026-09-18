@@ -11,7 +11,7 @@ function corePath(name) {
   return path.join(ROOT, 'core', name);
 }
 
-// loadCore(['keyvizEvents.js']) -> context with those globals
+// loadCore(['events.js']) -> context with those globals
 // loadCore(['keycapColors.js'], {Qt: {...}}) -> plus extra stubs
 function loadCore(names, stubs = {}) {
   const context = vm.createContext(Object.assign({console}, stubs));

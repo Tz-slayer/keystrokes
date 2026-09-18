@@ -2,7 +2,7 @@
     "id": "keystrokes",
     "name": "Keystrokes",
     "icon": "keyboard",
-    "description": "Displays keystrokes and mouse actions on screen, with keyviz's animations and keycaps, for screencasts and tutorials",
+    "description": "Keystroke and mouse overlay for DankMaterialShell, ported from keyviz, for screencasts and tutorials",
     "version": "1.2.0",
     "author": "hthienloc",
     "type": "composite",
@@ -11,10 +11,10 @@
         "control-center"
     ],
     "components": {
-        "daemon": "./KeyvizDaemon.qml",
-        "widget": "./KeyvizWidget.qml"
+        "daemon": "./Daemon.qml",
+        "widget": "./Widget.qml"
     },
-    "settings": "./KeyvizSettings.qml",
+    "settings": "./Settings.qml",
     "requires_dms": ">=1.5.0",
     "permissions": [
         "settings_read",

@@ -32,7 +32,7 @@ test('core/ and ui/ never reference DMS', () => {
 });
 
 test('the DMS entry points keep the shell imports', () => {
-  const daemon = fs.readFileSync(path.join(root, 'KeyvizDaemon.qml'), 'utf8');
+  const daemon = fs.readFileSync(path.join(root, 'Daemon.qml'), 'utf8');
   // The compositor lookup belongs here: the overlay asks for an output name so
   // that ui/ stays shell-agnostic.
   assert.match(daemon, /focusedOutputName:/, 'the daemon must feed the overlay its output name');
@@ -41,7 +41,13 @@ test('the DMS entry points keep the shell imports', () => {
 
 test('the runtime keeps no dependency on the settings pages', () => {
   for (const { file, text } of [...sources('core'), ...sources('ui')]) {
-    assert.doesNotMatch(text, /\b(?:KeyvizSettings|KeyvizParitySettings|KeyvizWidget|ColorDropdown\w*|SettingsCard)\b/,
+    // The settings-side QML files and the DMS-only row widgets. Names are spelled
+    // with their .qml suffix where a bare name would be ambiguous: `Settings.qml`
+    // must not be confused with `core/keyStyle.js`'s KeyStyle qualifier, which is
+    // runtime code the overlay is allowed to import.
+    assert.doesNotMatch(
+      text,
+      /\b(?:Settings\.qml|ParitySettings|Widget\.qml|ColorDropdown\w*|SettingsCard)\b/,
       `${file} must not reach into the DMS-facing UI`);
   }
 });

@@ -19,7 +19,7 @@ const { spawnSync } = require('node:child_process');
 // the settings widget, a predicate in the overlay -- so they are asserted
 // separately: the pure rule in overlay-layout.test.cjs, and the state machine
 // below, which drives the real onResolvedScreenNameChanged / commitScreen /
-// screenSettle code copied from ui/KeyvizOverlay.qml.
+// screenSettle code copied from ui/Overlay.qml.
 //
 // `followsFocus` and `resolvedScreenName` are *bound* in the harness exactly as
 // the overlay binds them, so replacing the hard-coded predicate in the overlay

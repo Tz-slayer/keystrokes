@@ -1,9 +1,9 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import "../core/keyvizStyle.js" as KeyvizStyle
+import "../core/keyStyle.js" as KeyStyle
 import "../core/overlayLayout.js" as OverlayLayout
-import "../core/keyvizMotion.js" as KeyvizMotion
+import "../core/motion.js" as Motion
 import "../core/listModelSync.js" as ListModelSync
 
 // A transparent click-through stage. Only Keyviz's per-group backgrounds paint.
@@ -18,7 +18,7 @@ PanelWindow {
     // "" means the host cannot name the focused output right now.
     property string focusedOutputName: ""
     property var fallbackScreen: null
-    readonly property var config: daemon ? daemon.config : KeyvizStyle.settings({})
+    readonly property var config: daemon ? daemon.config : KeyStyle.settings({})
     readonly property real capFontSize: config.fontSize
     readonly property string animType: config.animationType
     readonly property int animDuration: animType === "none" ? 0 : config.animationDuration
@@ -197,7 +197,7 @@ PanelWindow {
             // (0, 0); later content-size changes remain frame-coalesced below.
             onItemAdded: layout.recomputeGeometry()
             onItemRemoved: layout.recomputeGeometry()
-            delegate: KeyvizGroup {
+            delegate: Group {
                 id: group
                 required property int index
                 required property int uid
@@ -221,17 +221,17 @@ PanelWindow {
                 Behavior on x {
                     enabled: group.entered && !layout.suppressPositionAnimation
                     NumberAnimation {
-                        duration: KeyvizMotion.reflowDuration(overlayWindow.animDuration)
+                        duration: Motion.reflowDuration(overlayWindow.animDuration)
                         easing.type: Easing.BezierSpline
-                        easing.bezierCurve: KeyvizMotion.enterCurve()
+                        easing.bezierCurve: Motion.enterCurve()
                     }
                 }
                 Behavior on y {
                     enabled: group.entered && !layout.suppressPositionAnimation
                     NumberAnimation {
-                        duration: KeyvizMotion.reflowDuration(overlayWindow.animDuration)
+                        duration: Motion.reflowDuration(overlayWindow.animDuration)
                         easing.type: Easing.BezierSpline
-                        easing.bezierCurve: KeyvizMotion.enterCurve()
+                        easing.bezierCurve: Motion.enterCurve()
                     }
                 }
                 onDyingChanged: if (dying) removal.restart()

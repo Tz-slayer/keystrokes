@@ -43,7 +43,7 @@ Column {
             options: [{ label: I18n.tr("Off — All Keys"), value: "none" }, { label: I18n.tr("Hotkeys"), value: "modifiers" }, { label: I18n.tr("Custom"), value: "custom" }]
             defaultValue: "modifiers"
         }
-        KeyvizValueSetting {
+        ValueSetting {
             settingKey: "allowedKeys"; kind: "keys"
             label: I18n.tr("Allowed Keys")
             description: I18n.tr("Comma-separated names, for example Ctrl,Super,Alt,A,Enter. Use Comma for the comma key. A sequence is shown only when its first pressed key is allowed.")
@@ -63,7 +63,7 @@ Column {
             settingKey: "maxHistory"; label: I18n.tr("Maximum History Groups")
             minimum: 2; maximum: 12; defaultValue: 5; enabled: historySetting.value
         }
-        KeyvizValueSetting {
+        ValueSetting {
             settingKey: "toggleShortcut"; kind: "keys"
             label: I18n.tr("Toggle Shortcut")
             description: I18n.tr("Comma-separated keys, for example Shift,F10. Leave empty to disable the shortcut.")
@@ -76,7 +76,7 @@ Column {
             settingKey: "monitorName"; label: I18n.tr("Display")
             options: root.monitorOptions; defaultValue: OverlayLayout.followFocusValue()
         }
-        KeyvizRow {
+        Row {
             label: I18n.tr("Link horizontal and vertical margins")
             description: I18n.tr("Move both margins together.")
             clickable: true
@@ -102,52 +102,52 @@ Column {
     SettingsCard {
         SectionTitle { text: I18n.tr("Colors & Border"); icon: "palette" }
         ToggleSettingPlus { settingKey: "useGradient"; label: I18n.tr("Gradient (Laptop / PBT)"); defaultValue: true }
-        KeyvizColorRow {
+        ColorRow {
             label: I18n.tr("Keycap Colors")
             description: I18n.tr("Cap face, base wall and label. Click a swatch to open the colour picker; its opacity slider sets the alpha.")
             Flow {
                 width: parent.width
                 spacing: Theme.spacingM
-                KeyvizColorSwatch { settingKey: "capColor"; caption: I18n.tr("Cap"); description: I18n.tr("Keycap face"); defaultValue: "#ffffff" }
-                KeyvizColorSwatch { settingKey: "secondaryColor"; caption: I18n.tr("Base"); description: I18n.tr("Base wall"); defaultValue: "#1a1a1a" }
-                KeyvizColorSwatch { settingKey: "labelColor"; caption: I18n.tr("Label"); description: I18n.tr("Label text"); defaultValue: "#000000" }
+                ColorSwatch { settingKey: "capColor"; caption: I18n.tr("Cap"); description: I18n.tr("Keycap face"); defaultValue: "#ffffff" }
+                ColorSwatch { settingKey: "secondaryColor"; caption: I18n.tr("Base"); description: I18n.tr("Base wall"); defaultValue: "#1a1a1a" }
+                ColorSwatch { settingKey: "labelColor"; caption: I18n.tr("Label"); description: I18n.tr("Label text"); defaultValue: "#000000" }
             }
         }
         ToggleSettingPlus {
             id: modifierSetting
             settingKey: "modifierHighlight"; label: I18n.tr("Highlight Modifiers"); defaultValue: false
         }
-        KeyvizColorRow {
+        ColorRow {
             label: I18n.tr("Modifier Colors")
             description: I18n.tr("Used while a modifier is held.")
             Flow {
                 width: parent.width
                 spacing: Theme.spacingM
-                KeyvizColorSwatch { settingKey: "modifierColor"; caption: I18n.tr("Cap"); description: I18n.tr("Modifier keycap face"); defaultValue: "#3a86ff"; enabled: modifierSetting.value }
-                KeyvizColorSwatch { settingKey: "modifierSecondaryColor"; caption: I18n.tr("Base"); description: I18n.tr("Modifier base wall"); defaultValue: "#000000"; enabled: modifierSetting.value }
-                KeyvizColorSwatch { settingKey: "modifierTextColor"; caption: I18n.tr("Label"); description: I18n.tr("Modifier label text"); defaultValue: "#000000"; enabled: modifierSetting.value }
+                ColorSwatch { settingKey: "modifierColor"; caption: I18n.tr("Cap"); description: I18n.tr("Modifier keycap face"); defaultValue: "#3a86ff"; enabled: modifierSetting.value }
+                ColorSwatch { settingKey: "modifierSecondaryColor"; caption: I18n.tr("Base"); description: I18n.tr("Modifier base wall"); defaultValue: "#000000"; enabled: modifierSetting.value }
+                ColorSwatch { settingKey: "modifierTextColor"; caption: I18n.tr("Label"); description: I18n.tr("Modifier label text"); defaultValue: "#000000"; enabled: modifierSetting.value }
             }
         }
         ToggleSettingPlus {
             id: borderSetting
             settingKey: "borderEnabled"; label: I18n.tr("Enable Border"); defaultValue: true
         }
-        KeyvizValueSetting {
+        ValueSetting {
             settingKey: "borderWidth"; label: I18n.tr("Border Width")
             description: I18n.tr("Pixels, at least 0.5; fractional values are supported.")
             minimum: 0.5; maximum: 20; defaultValue: 2; enabled: borderSetting.value
         }
-        KeyvizColorRow {
+        ColorRow {
             label: I18n.tr("Border Colors")
             description: I18n.tr("Ring around the cap, and the ring used while a modifier is held.")
             Flow {
                 width: parent.width
                 spacing: Theme.spacingM
-                KeyvizColorSwatch { settingKey: "borderColor"; caption: I18n.tr("Border"); description: I18n.tr("Keycap border"); defaultValue: "#1a1a1a"; enabled: borderSetting.value }
-                KeyvizColorSwatch { settingKey: "modifierBorderColor"; caption: I18n.tr("Modifier"); description: I18n.tr("Modifier keycap border"); defaultValue: "#000000"; enabled: borderSetting.value && modifierSetting.value }
+                ColorSwatch { settingKey: "borderColor"; caption: I18n.tr("Border"); description: I18n.tr("Keycap border"); defaultValue: "#1a1a1a"; enabled: borderSetting.value }
+                ColorSwatch { settingKey: "modifierBorderColor"; caption: I18n.tr("Modifier"); description: I18n.tr("Modifier keycap border"); defaultValue: "#000000"; enabled: borderSetting.value && modifierSetting.value }
             }
         }
-        KeyvizValueSetting {
+        ValueSetting {
             settingKey: "borderRadius"; label: I18n.tr("Corner Radius")
             description: I18n.tr("Corner radius ratio from 0 (square) to 1 (round).")
             minimum: 0; maximum: 1; defaultValue: 0.5

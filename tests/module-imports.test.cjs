@@ -14,8 +14,8 @@ const path = require('node:path');
 // signal handler that used it. For the daemon that meant every input line threw
 // and the overlay stayed empty — the plugin looked dead while it was running.
 //
-// The aliases are derived from the module files themselves (keyvizEvents.js ->
-// KeyvizEvents), not from the import lines, so deleting an import cannot hide
+// The aliases are derived from the module files themselves (events.js ->
+// Events), not from the import lines, so deleting an import cannot hide
 // the usage it was supposed to satisfy.
 const root = path.resolve(__dirname, '..');
 
@@ -41,7 +41,7 @@ const all = walk();
 const sources = all.filter(f => f.endsWith('.qml'))
   .map(file => [file, stripComments(fs.readFileSync(path.join(root, file), 'utf8'))]);
 
-// keyvizEvents.js -> KeyvizEvents, inputParse.js -> InputParse
+// events.js -> Events, inputParse.js -> InputParse
 const aliasOf = name => path.basename(name, '.js').replace(/^./, c => c.toUpperCase());
 const aliases = new Set(all.filter(f => f.endsWith('.js') && !f.startsWith('tests/')).map(aliasOf));
 // A file may also import a module under a name of its own choosing.

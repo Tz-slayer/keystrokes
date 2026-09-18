@@ -1,6 +1,6 @@
 import QtQuick
 import "../core/groupFrame.js" as GroupFrame
-import "../core/keyvizMotion.js" as KeyvizMotion
+import "../core/motion.js" as Motion
 import "../core/listModelSync.js" as ListModelSync
 
 Item {
@@ -52,7 +52,7 @@ Item {
         NumberAnimation {
             duration: group.settings.config.showEventHistory ? group.duration : 0
             easing.type: Easing.BezierSpline
-            easing.bezierCurve: KeyvizMotion.curve(group.dying)
+            easing.bezierCurve: Motion.curve(group.dying)
         }
     }
 
@@ -97,9 +97,9 @@ Item {
         move: Transition {
             NumberAnimation {
                 properties: "x,y"
-                duration: KeyvizMotion.reflowDuration(group.duration)
+                duration: Motion.reflowDuration(group.duration)
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: KeyvizMotion.enterCurve()
+                easing.bezierCurve: Motion.enterCurve()
             }
         }
         Repeater {
@@ -117,14 +117,14 @@ Item {
                 // only the newly pressed key uses the entrance variant.
                 property bool entered: !animateIn
                 readonly property bool hiddenState: dying || group.dying || !entered
-                readonly property var curve: KeyvizMotion.curve(unit.hiddenState)
+                readonly property var curve: Motion.curve(unit.hiddenState)
                 width: cap.width
                 height: cap.height
-                opacity: KeyvizMotion.opacity(group.settings.animType, unit.hiddenState)
-                scale: KeyvizMotion.scale(group.settings.animType, unit.hiddenState)
+                opacity: Motion.opacity(group.settings.animType, unit.hiddenState)
+                scale: Motion.scale(group.settings.animType, unit.hiddenState)
                 transform: Translate {
-                    x: KeyvizMotion.offset(group.settings.animType, "x", group.settings.capFontSize, unit.hiddenState)
-                    y: KeyvizMotion.offset(group.settings.animType, "y", group.settings.capFontSize, unit.hiddenState)
+                    x: Motion.offset(group.settings.animType, "x", group.settings.capFontSize, unit.hiddenState)
+                    y: Motion.offset(group.settings.animType, "y", group.settings.capFontSize, unit.hiddenState)
                     Behavior on x { NumberAnimation { duration: group.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: unit.curve } }
                     Behavior on y { NumberAnimation { duration: group.duration; easing.type: Easing.BezierSpline; easing.bezierCurve: unit.curve } }
                 }

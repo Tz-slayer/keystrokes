@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const pages = ['KeyvizSettings.qml', path.join('settings', 'KeyvizParitySettings.qml')];
+const pages = ['Settings.qml', path.join('settings', 'ParitySettings.qml')];
 
 // Every option in the plugin's settings UI is one of the DMS-styled rows, not a
 // stock Qt Quick control: a raw ComboBox/CheckBox next to a themed row is the
@@ -15,8 +15,8 @@ const ALLOWED = new Set([
   'StyledText', 'DankButton', 'DankDropdown', 'DankToggle', 'DankIcon', 'DankTextField',
   'SettingsCard', 'SectionTitle', 'UsageGuide', 'PluginAbout', 'CopyBox',
   'ToggleSettingPlus', 'SelectionSettingPlus', 'SliderSettingPlus',
-  'KeyvizRow', 'KeyvizValueSetting', 'KeyvizParitySettings',
-  'KeyvizColorRow', 'KeyvizColorSwatch',
+  'Row', 'ValueSetting', 'ParitySettings',
+  'ColorRow', 'ColorSwatch',
   'PluginSettings',
   // container/plumbing types a page may need around the rows
   'Repeater', 'MouseArea', 'HoverHandler', 'DankTooltipV2',
@@ -48,15 +48,28 @@ test('no stock Qt Quick control and no divider survives in the settings UI', () 
 });
 
 test('every settings row carries a label', () => {
+  // settings/Row.qml is used as a plain `Row {`, which Qt Quick's own layout
+  // container also spells. They are told apart by the first property: a settings
+  // row always opens with `label:`, a layout container with spacing/anchors or
+  // nested children. So this checks the ones that already look like settings
+  // rows (they must stay labelled) plus every other row type unconditionally.
+  const ROW_TYPES = 'ValueSetting|ColorRow|SelectionSettingPlus|ToggleSettingPlus|SliderSettingPlus';
+
   for (const page of pages) {
     const source = fs.readFileSync(path.join(ROOT, page), 'utf8');
-    // Row instances are declared over one or more lines; pair each opening with
-    // the block that follows it.
-    for (const match of source.matchAll(/\b(KeyvizValueSetting|KeyvizRow|KeyvizColorRow|SelectionSettingPlus|ToggleSettingPlus|SliderSettingPlus)\s*\{([\s\S]*?)\n(\s*)\}/g)) {
-      const [, name, body] = match;
-      if (name === 'KeyvizValueSetting' || name === 'KeyvizRow' || name === 'KeyvizColorRow') {
-        assert.match(body, /\blabel:/, `a ${name} in ${page} has no label`);
-      }
+
+    for (const [, name, body] of source.matchAll(
+      new RegExp(`^\\s*(${ROW_TYPES})\\s*\\{([\\s\\S]*?)\\n\\s*\\}`, 'gm'))) {
+      assert.match(body, /\blabel:/, `a ${name} in ${page} has no label`);
+    }
+
+    // Plain `Row {` must be either a labelled settings row or a layout
+    // container; a bare row with neither a label nor any child is a mistake.
+    for (const [, body] of source.matchAll(/^\s*Row\s*\{([\s\S]*?)\n\s*\}/gm)) {
+      const isSettingsRow = /^\s*label\s*:/.test(body);
+      const isLayout = /^\s*(spacing|[a-z]+\.[a-z]+)\s*:/.test(body) || /[A-Z]\w*\s*\{/.test(body);
+      assert.ok(isSettingsRow || isLayout,
+        `a Row in ${page} is neither a labelled settings row nor a layout container`);
     }
   }
 });

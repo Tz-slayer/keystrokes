@@ -27,7 +27,7 @@ function stubModel(rows = []) {
   };
 }
 
-// Mirrors KeyvizGroup: `last` is derived from the position inside the snapshot,
+// Mirrors Group: `last` is derived from the position inside the snapshot,
 // so the option builder closes over the snapshot it is applied to.
 const capOptions = keys => ({
   keyField: 'keyId',

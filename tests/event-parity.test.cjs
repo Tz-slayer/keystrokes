@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {loadCore} = require('./helpers/load.cjs');
-const api = loadCore(['keyvizEvents.js']);
+const api = loadCore(['events.js']);
 const config = { eventFilter: 'none', allowedKeys: ['Ctrl', 'Super', 'Alt'], showEventHistory: false, maxHistory: 5, fadeTimeout: 5000 };
 const plain = value => JSON.parse(JSON.stringify(value));
 const labels = state => plain(state.groups.map(group => group.keys.map(key => key.label)));

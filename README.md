@@ -178,7 +178,7 @@ This plugin would not exist without two projects, and the split matters when rea
 
 Where the plugin deliberately departs from keyviz, the code says so — the mute keycap is the clearest example, drawing the sink's real mute state instead of always showing a crossed speaker.
 
-One name keeps "keyviz" on purpose: the core modules (`keyvizStyle.js`, `keyvizEvents.js`, `keyvizMotion.js`), because they speak keyviz's own format and event model.
+No file or type in this plugin carries the upstream name any more: the entry points are `Daemon.qml` / `Widget.qml` / `Settings.qml`, and the runtime modules live in `core/` under their own names. Where a *format* is keyviz's — the native style JSON, the key names in **Allowed Keys** — the docs say so, because that is provenance rather than branding.
 
 ## Contributing
 

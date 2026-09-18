@@ -10,7 +10,7 @@ const {loadCore, qtRgbaStub} = require('./helpers/load.cjs');
 // Wayland compositor or the DMS shell. StyledText supplies only font defaults.
 test('keycap geometry and alignment match Keyviz', () => {
   const root = path.resolve(__dirname, '..');
-  const source = fs.readFileSync(path.join(root, 'ui', 'KeyvizOverlay.qml'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'ui', 'Overlay.qml'), 'utf8');
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'screenkey-qt-'));
   try {
     // Mirror the runtime layout (ui/ + core/ + fonts/) instead of flattening:
@@ -52,9 +52,9 @@ Item {
 
     Keycap { id: cap; settings: overlayWindow; label: "Ctrl" }
     Component { id: capFactory; Keycap {} }
-    KeyvizGroup { id: group; y: 120; settings: overlayWindow; visible: false }
+    Group { id: group; y: 120; settings: overlayWindow; visible: false }
     TestCase {
-        name: "KeyvizGeometry"
+        name: "KeystrokeGeometry"
         when: windowShown
         function init() {
             overlayWindow.styleParams = {type: "pbt", baseColor: "#ffffff", secondaryColor: "#1a1a1a", textColor: "#000000", borderColor: "#1a1a1a", cornerRadius: 0.5, borderWidth: 2, gradient: false};

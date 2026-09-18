@@ -2,7 +2,7 @@ import QtQuick
 import "../core/KeyIcons.js" as KeyIcons
 import "../core/groupFrame.js" as GroupFrame
 import "../core/keycapColors.js" as KeycapColors
-import "../core/keyvizMotion.js" as KeyvizMotion
+import "../core/motion.js" as Motion
 
 Item {
     id: keycap
@@ -11,7 +11,7 @@ Item {
     component PressAnimation: NumberAnimation {
         duration: 100
         easing.type: Easing.BezierSpline
-        easing.bezierCurve: KeyvizMotion.pressCurve()
+        easing.bezierCurve: Motion.pressCurve()
     }
 
     FontLoader { id: keycapFont; source: "../fonts/InterVariable.ttf" }
@@ -68,7 +68,7 @@ Item {
         ? 0
         : (keycap.isPbt ? keycap.fs * 0.15 : (keycap.isLowProfile ? keycap.fs * 0.25 : 0))
 
-    // The host may inject the sink's mute state (see KeyvizDaemon); when it
+    // The host may inject the sink's mute state (see Daemon); when it
     // does not, `undefined` keeps the mute keycap on upstream's static
     // crossed-speaker icon instead of guessing "unmuted".
     readonly property var kd: KeyIcons.display(label, settings.systemMuted)

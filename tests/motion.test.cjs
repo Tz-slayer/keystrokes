@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {loadCore} = require('./helpers/load.cjs');
 
-const api = loadCore(['keyvizMotion.js']);
+const api = loadCore(['motion.js']);
 
 test('entering and leaving use different splines', () => {
   assert.deepEqual(Array.from(api.enterCurve()), [0.23, 1, 0.32, 1, 1, 1]);

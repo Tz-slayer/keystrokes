@@ -9,7 +9,7 @@ Rectangle {
     color: "#dce1e8"
     Column {
         x: 32; y: 24; spacing: 28
-        Text { text: "Keyviz · QML rendering"; font.pixelSize: 24; color: "#20242c" }
+        Text { text: "Keystrokes · QML rendering"; font.pixelSize: 24; color: "#20242c" }
         Repeater {
             model: ["minimal", "laptop", "lowprofile", "pbt"]
             delegate: Row {
@@ -33,7 +33,7 @@ Rectangle {
                 property var styleParams: ({type:modelData,baseColor:"#ffffff",secondaryColor:"#1a1a1a",textColor:"#000000",borderColor:"#1a1a1a",cornerRadius:0.5,borderWidth:2,gradient:true})
                 function isKeyHeld(label) { return label === "Shift"; }
                 Text { width: 120; anchors.verticalCenter: parent.verticalCenter; text: options.modelData; font.pixelSize: 19; color:"#20242c" }
-                KeyvizGroup {
+                Group {
                     settings: options
                     latest: true
                     keys: [{label:"Ctrl",count:1},{label:"Shift",count:1},{label:"A",count:1},{label:"1",count:1},{label:"↑",count:1},{label:"Backspace",count:3}]
@@ -48,7 +48,7 @@ Rectangle {
             wait(350);
             const frame = grabImage(preview);
             verify(frame.red(210,220) < 150, "laptop modifier must be painted on software and hardware renderers");
-            frame.save("/tmp/keyviz-parity-preview.png");
+            frame.save("/tmp/keystrokes-parity-preview.png");
         }
     }
 }

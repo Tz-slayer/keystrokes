@@ -154,7 +154,7 @@ const DISPLAY = {
 // keyviz letter/digit categories.
 // Keycaps synthesised from mouse input instead of a real key. The overlay uses
 // this to pick the Keycap renderer over the plain-text renderer
-// (KeyvizOverlay.qml); keeping the list here means a new mouse keycap only has
+// (Overlay.qml); keeping the list here means a new mouse keycap only has
 // to be added in one place.
 const MOUSE_EVENTS = [
     "LMB Click", "RMB Click", "MMB Click", "Mouse Click",

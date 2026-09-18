@@ -5,15 +5,15 @@ import qs.Widgets
 // Settings whose value is a literal rather than a choice: keep Keyviz's
 // fractional numbers exactly as written, which is why this uses a plain field
 // instead of a slider or a role dropdown. Colours do not come through here --
-// they are swatches (see KeyvizColorSwatch).
+// they are swatches (see ColorSwatch).
 //
 // The row chrome (label, info tooltip, reset affordance, hover) comes from
-// KeyvizRow, so these rows look like the vendored `*SettingPlus` ones.
-KeyvizRow {
+// Row, so these rows look like the vendored `*SettingPlus` ones.
+Row {
     id: root
 
     // `label`, `description`, `isDirty`, `showReset` and the control slots are
-    // inherited from KeyvizRow (QML does not allow redeclaring them).
+    // inherited from Row (QML does not allow redeclaring them).
     required property string settingKey
     property string kind: "number"
     property var defaultValue: 0

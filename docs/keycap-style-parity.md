@@ -29,22 +29,28 @@ Mouse 相关设置与指针定位不属于本次复刻范围（指针定位的�
 
 目录按依赖划分：`core/` 与 `ui/` 不依赖 DMS，只有根目录的三个入口可以引用 `qs.*`、`Theme`、`I18n` 等 shell 侧 API。
 
-- `core/keyvizStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
-- `core/keyvizEvents.js`：不可变按键状态、过滤、分组、计数和过期。
-- `core/keyvizMotion.js`：缓动曲线与动画变体（fade/zoom/float/slide）的唯一描述。
+命名上**本插件内部不出现上游的名字**：入口是 `Daemon.qml` / `Widget.qml` / `Settings.qml`，
+运行时模块在 `core/` 下各用本名。keyviz 只出现在"这是上游的东西"的语境里
+（原生样式 JSON 格式、`Allowed Keys` 里的键名约定、以及各处出处说明）。
+
+- `core/keyStyle.js`：默认值、校验、迁移、原版 JSON 转换、配色。
+- `core/events.js`：不可变按键状态、过滤、分组、计数和过期。
+- `core/motion.js`：缓动曲线与动画变体（fade/zoom/float/slide）的唯一描述。
 - `core/listModelSync.js`：历史行与键帽共用的 ListModel 对账（原地更新 + dying + 延时移除）。
 - `core/inputParse.js`：libinput/evtest 行解析（按键、按键位、滚轮方向、指针增量）。
 - `core/overlayLayout.js`：分组绝对定位与显示器解析。
-- `KeyvizDaemon.qml`（DMS 入口）：输入进程、设备扫描、物理键身份、全局快捷键、插件持久化；把焦点输出名注入 overlay。
-- `ui/KeyvizOverlay.qml`：透明点击穿透窗口、显示器与分组排列。
-- `ui/KeyvizGroup.qml`：按身份保留键帽、独立进出动画、分组背景及圆角裁剪。
+- `Daemon.qml`（DMS 入口）：输入进程、设备扫描、物理键身份、全局快捷键、插件持久化；把焦点输出名注入 overlay。
+- `ui/Overlay.qml`：透明点击穿透窗口、显示器与分组排列。
+- `ui/Group.qml`：按身份保留键帽、独立进出动画、分组背景。
 - `ui/Keycap.qml` / `ui/KeycapSurface.qml`：字体、几何、按压反馈、边框与渐变阴影。
+- `settings/`：`ParitySettings.qml`（复刻项）、`Row.qml`（行外壳）、`ColorRow.qml`、
+  `ColorSwatch.qml`、`ValueSetting.qml`。
 
 ## 验证
 
 ```sh
 node --test tests/*.test.cjs
-/usr/lib/qt6/bin/qmllint KeyvizDaemon.qml KeyvizSettings.qml ui/*.qml settings/*.qml core/*.js
+/usr/lib/qt6/bin/qmllint Daemon.qml Settings.qml ui/*.qml settings/*.qml core/*.js
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/keycap-preview.qml
 QT_QPA_PLATFORM=wayland QSG_RHI_BACKEND=opengl /usr/lib/qt6/bin/qmltestrunner -input tests/keycap-preview.qml
 ```
@@ -54,7 +60,7 @@ QT_QPA_PLATFORM=wayland QSG_RHI_BACKEND=opengl /usr/lib/qt6/bin/qmltestrunner -i
 
 Node 套件还启动真实 Qt Quick 组件进行布局和绘制测试，不只是文本断言。
 `core/` 各模块语句覆盖率 95–100%（`keyMapper.js` 89%、`keycapColors.js` 74% 为剩余缺口）；
-QML 使用运行时断言与截图检查。预览生成 `/tmp/keyviz-parity-preview.png`。
+QML 使用运行时断言与截图检查。预览生成 `/tmp/keystrokes-parity-preview.png`。
 设置页在独立 Quickshell 环境中编译、实例化并导出 JSON。
 
 ## 明确的边界
