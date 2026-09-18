@@ -139,7 +139,12 @@ Item {
                     label: unit.label
                     pressed: group.latest && !unit.dying && group.settings.isKeyHeld(unit.keyId)
                     animateInitialPress: unit.animateIn
-                    pressCount: unit.last ? unit.count : 0
+                    // Every keycap carries its own count. keyviz only badges the
+                    // last key of the newest group, which meant a repeat on any
+                    // earlier key of a combo (Ctrl then C, C, C) was counted but
+                    // never shown. `Keycap` already hides the badge below 2, so
+                    // handing it the real value is enough.
+                    pressCount: unit.count
                 }
             }
         }

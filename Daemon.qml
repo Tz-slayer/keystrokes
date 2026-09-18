@@ -448,10 +448,15 @@ print(json.dumps(devs))
         root.altActive = root.heldKeys.includes("Alt");
         root.shiftActive = root.heldKeys.includes("Shift");
         root.superActive = root.heldKeys.includes("Super");
-        root.historyList = state.groups.map(g => ({uid: g.uid, text: g.keys.map(k => root.displayKeyLabel(k.label)).join(" + "),
+        // `keyId` stays the state machine's own key (a raw evdev code on the
+        // keyboard path, a label on the mouse/IPC path); `label` is what the
+        // keycap draws. Mapping `keyId` through KeyMapper as well would turn an
+        // already-mapped "Ctrl" into "LEFTCTRL", so the two are kept apart.
+        const cap = k => ({label: root.displayKeyLabel(k.label), keyId: k.label,
+                           count: k.count, animateIn: k.animateIn !== false});
+        root.historyList = state.groups.map(g => ({uid: g.uid, text: g.keys.map(cap).map(k => k.label).join(" + "),
             isCombo: g.keys.length > 1, count: g.keys.length ? g.keys[g.keys.length-1].count : 1,
-            keys: g.keys.map(k => ({label: root.displayKeyLabel(k.label), keyId: k.label,
-                                    count: k.count, animateIn: k.animateIn !== false}))}));
+            keys: g.keys.map(cap)}));
     }
 
     function handleKeyPress(keyName) {
@@ -466,13 +471,17 @@ print(json.dumps(devs))
             return;
         }
         if (!root.enabled || !label) return;
-        root.applyKeyboard(Events.press(root.keyboardState, keyName, Date.now(), root.eventConfig));
+        // The state machine is fed the *display* label, not the raw code: the
+        // mouse, wheel and IPC paths all speak labels, so mixing the two left
+        // `heldKeys` holding a code next to labels. `physicalKeys` keeps the raw
+        // code, which is what the per-code repeat/toggle checks above need.
+        root.applyKeyboard(Events.press(root.keyboardState, label, Date.now(), root.eventConfig));
     }
 
     function handleKeyRelease(keyName) {
         root.physicalKeys = root.physicalKeys.filter(key => key !== keyName);
         const label = root.displayKeyLabel(keyName);
-        root.applyKeyboard(Events.release(root.keyboardState, keyName, Date.now()));
+        root.applyKeyboard(Events.release(root.keyboardState, label, Date.now()));
     }
 
     Timer {

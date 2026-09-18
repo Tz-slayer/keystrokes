@@ -54,46 +54,59 @@ function press(state, label, now, config) {
     if (ignored) return { heldKeys: heldKeys, groups: state.groups, nextUid: state.nextUid };
 
     const last = state.groups[state.groups.length - 1];
-    const existing = last && last.keys.some(function(key) { return key.label === label; });
-    const held = function(key) { return heldKeys.indexOf(key.label) !== -1; };
+    // A key is identified by the label it *displays*, never by the caller's
+    // spelling of it. Nearly every caller already presses labels -- the mouse
+    // and wheel paths, and the `dms ipc keystrokes test` preview -- but the
+    // keyboard path presses raw evdev codes ("KEY_LEFTCTRL"). `displayLabel` is
+    // the daemon's mapper for exactly that, so routing every comparison through
+    // it keeps the two spellings from splitting one key into two keycaps.
+    //
+    // They used to split: a repeat searched for "KEY_LEFTCTRL" among keycaps
+    // labelled "Ctrl", found nothing, and appended a *second* keycap beside the
+    // one it meant to bump. On screen that was Ctrl×1 next to C×2 -- a count
+    // that reset, plus a duplicate keycap -- which is the flicker and the "no
+    // badge at all" both.
+    const keyId = function(raw) { return config.displayLabel ? config.displayLabel(raw) : raw; };
+    const named = keyId(label);
+    const existing = last && last.keys.some(function(key) { return keyId(key.label) === named; });
+    const held = function(key) { return heldKeys.some(function(raw) { return keyId(raw) === keyId(key.label); }); };
     let keys;
     let append = false;
     let replaceAll = false;
     if (existing) {
-        append = config.showEventHistory && last.keys.length > 1;
-        keys = append ? last.keys.filter(held).map(function(key) {
-            // A held modifier is context carried into the next shortcut. Only
-            // the key that generated this press should replay its entrance.
-            //
-            // NOTE (upstream parity, deliberate): this branch rebuilds the
-            // whole group, so every key in it -- including the one just
-            // repressed -- restarts at count 1. Upstream does the same thing
-            // (`new KeyEvent(...)` in keyviz key_event.ts:156-163) and only
-            // reaches its `existingKey.press()` increment on the branches
-            // above, which require `last.keys.length <= 1`.
-            //
-            // So while two or more keys are held together (A+B, then press A
-            // again), the count does NOT grow, and because `append` is true a
-            // fresh group is pushed as well. Upstream behaves identically; this
-            // is recorded here so it is not mistaken for a regression -- see
-            // tests/event-parity.test.cjs for the locked-in cases.
-            return newKey(key.label, now, key.label === label);
-        })
-            : last.keys.filter(function(key) { return key.label === label || held(key); }).map(function(key) {
-                return key.label === label ? {
-                    label: key.label,
-                    count: key.count + 1,
-                    lastPressedAt: now,
-                    animateIn: key.animateIn !== false
-                } : key;
-            });
+        // Repressing a key that already sits in the last group is a repeat of
+        // *that group*, so it increments that keycap in place. The group is
+        // never rebuilt and no new group is pushed.
+        //
+        // Upstream keyviz instead pushes a brand-new group whenever the last
+        // group holds more than one key (`new KeyEvent(...)` in key_event.ts:
+        // 156-163), which restarts every count at 1 and gives the group a new
+        // uid. Two things went wrong with that here:
+        //   * the count never reached the user while a combo was held, and
+        //   * the new uid made the overlay tear the group down and rebuild it,
+        //     so the press-count badge flickered on every repeat.
+        // Incrementing in place fixes both: identity and count survive.
+        //
+        // A sibling that is no longer held is pruned, which is what upstream's
+        // `gKey.in(pressedKeys)` filter did. That pruning is what makes replace
+        // mode collapse Ctrl+C+V into Ctrl+V rather than accumulating every key
+        // ever pressed; without it the group grows monotonically.
+        keys = last.keys.map(function(key) {
+            if (keyId(key.label) !== named) return held(key) ? key : null;
+            return {
+                label: key.label,
+                count: key.count + 1,
+                lastPressedAt: now,
+                animateIn: key.animateIn !== false
+            };
+        }).filter(function(key) { return key !== null; });
     } else if (heldKeys.length === 1 || !last) {
-        keys = [newKey(label, now)];
+        keys = [newKey(named, now)];
         append = true;
         replaceAll = !config.showEventHistory;
     } else {
         append = config.showEventHistory && last.keys.some(function(key) { return !held(key); });
-        keys = (append ? last.keys.filter(held).map(carryKey) : last.keys).concat([newKey(label, now)]);
+        keys = (append ? last.keys.filter(held).map(carryKey) : last.keys).concat([newKey(named, now)]);
     }
     const group = { uid: !config.showEventHistory ? 0 : (append ? state.nextUid : last.uid), keys: keys };
     const groups = replaceAll ? [group] : append ? state.groups.concat([group])

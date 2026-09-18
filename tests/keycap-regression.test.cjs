@@ -6,6 +6,24 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const {loadCore, qtRgbaStub} = require('./helpers/load.cjs');
 
+// The press-count badge lives in the real delegate, so it is checked in the
+// real delegate: tests/count-badge.qml drives ui/Group.qml directly. Two things
+// it guards: handing every keycap its own count (keyviz only badged the last
+// one, which hid repeats on earlier keys of a combo), and the badge surviving a
+// repeat without the group being torn down and rebuilt.
+test('press-count badge reaches every keycap and survives repeats', () => {
+  const runner = process.env.QML_TEST_RUNNER
+    || (fs.existsSync('/usr/lib/qt6/bin/qmltestrunner') ? '/usr/lib/qt6/bin/qmltestrunner' : 'qmltestrunner');
+  const input = path.resolve(__dirname, 'count-badge.qml');
+  const result = spawnSync(runner, ['-input', input], {
+    encoding: 'utf8', timeout: 30000,
+    env: {...process.env, QT_QPA_PLATFORM: 'offscreen', QSG_RHI_BACKEND: 'software'},
+  });
+  assert.doesNotMatch(result.stdout + result.stderr, /(?:ReferenceError|TypeError|Unable to assign|QWARN)/,
+                      "the badge must render without QML warnings");
+  assert.equal(result.status, 0, `${result.error || ''}\n${result.stdout}\n${result.stderr}`);
+});
+
 // Run the production inline component in Qt Quick, without requiring a live
 // Wayland compositor or the DMS shell. StyledText supplies only font defaults.
 test('keycap geometry and alignment match Keyviz', () => {
@@ -206,8 +224,7 @@ Item {
 });
 
 // Neutral colors have a known OKLab result; alpha must survive conversion.
-test('Keyviz perceptual lightness preserves alpha and handles black', () => {
-  const context = loadCore(['keycapColors.js'], qtRgbaStub);
+test('Keyviz perceptual lightness preserves alpha and handles black', () => {  const context = loadCore(['keycapColors.js'], qtRgbaStub);
   const gray = context.shiftLightness({r: 1, g: 1, b: 1, a: 0.5}, -0.1);
   assert.ok(Math.abs(gray.r - 0.869817) < 0.00001);
   assert.ok(Math.abs(gray.r - gray.g) < 0.00001);
