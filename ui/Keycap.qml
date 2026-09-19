@@ -142,6 +142,17 @@ Item {
     // keyviz's "control" / "command" / "shift" caps come out visibly longer
     // than a bare letter. Measured on keyviz's own screenshot: a "control"
     // cap is ~3.2em wide against a 2.5em minWidth.
+    // ── the function row shares one width (deviation from keyviz) ──
+    // keyviz sizes every cap to its own label, which the function row cannot
+    // survive: at 32px the twelve come out 88.0px (F1) to 103.3px (F10), and
+    // even F1 and F4 differ by 2.8px, because Inter's digits are proportional.
+    // Twelve keys read as a row, so the row is as wide as its widest member and
+    // every F cap takes that width. `max` with the label's own width keeps a
+    // label that outgrows the sample visible instead of overflowing the cap
+    // (a test asserts all twelve agree, which fails if that ever happens).
+    readonly property bool isFunctionKey: /^F(?:[1-9]|1[0-2])$/.test(keycap.label)
+    readonly property real functionW: Math.max(measureFunction.implicitWidth,
+                                               measurePlain.implicitWidth)
     readonly property real contentW: {
         if (keycap.iconOnly) return keycap.fs * 0.8;
         if (keycap.iconLayout) return Math.max(keycap.fs * 0.5, measureSmall.implicitWidth);
@@ -149,6 +160,7 @@ Item {
                                                  measureSub.implicitWidth);
         if (keycap.isNumpad) return Math.max(measureHalf.implicitWidth,
                                              measureSymbolHalf.implicitWidth);
+        if (keycap.isFunctionKey) return keycap.functionW;
         return measurePlain.implicitWidth;
     }
     readonly property real capW: keycap.isMinimal
@@ -157,7 +169,11 @@ Item {
             + Math.max(keycap.isPbt ? keycap.fs * 2 : 0,
                 keycap.contentW + keycap.padInline * 2 + keycap.contentBorder * 2))
 
-    width: keycap.isMinimal ? minimalContent.implicitWidth : keycap.capW
+    // minimal has no cap body to size, so its width is the content's -- but the
+    // function row still shares one, or the row jumps as F1 becomes F10.
+    width: keycap.isMinimal
+        ? Math.max(minimalContent.implicitWidth, keycap.isFunctionKey ? keycap.functionW : 0)
+        : keycap.capW
     height: keycap.bodyH
 
     // Hidden measurers for the content width: keyviz measures with the same
@@ -174,6 +190,10 @@ Item {
     }
     Measurer { id: measureSmall; font.pixelSize: keycap.fs * 0.5 }
     Measurer { id: measurePlain }
+    // The function row's shared sample: the widest label of F1..F12 at this
+    // font, measured (F10 beats F12 by 0.7px at 32px). Never drawn -- it only
+    // tells every F cap how wide the row has to be.
+    Measurer { id: measureFunction; text: "F10" }
     Measurer { id: measureSymbol; font.pixelSize: keycap.fs * 0.56; text: keycap.kd.symbol || "" }
     Measurer { id: measureSub; font.pixelSize: keycap.fs * 0.56; font.weight: Font.DemiBold }
     Measurer { id: measureHalf; font.pixelSize: keycap.fs * 0.5 }

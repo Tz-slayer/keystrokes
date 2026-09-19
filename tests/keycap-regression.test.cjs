@@ -24,6 +24,21 @@ test('press-count badge reaches every keycap and survives repeats', () => {
   assert.equal(result.status, 0, `${result.error || ''}\n${result.stdout}\n${result.stderr}`);
 });
 
+// The function row shares one width (see ui/Keycap.qml): keyviz sizes each cap
+// to its own label, which put F1 at 88px against F10 at 103px in the same row.
+test('the twelve function keycaps share one width', () => {
+  const runner = process.env.QML_TEST_RUNNER
+    || (fs.existsSync('/usr/lib/qt6/bin/qmltestrunner') ? '/usr/lib/qt6/bin/qmltestrunner' : 'qmltestrunner');
+  const input = path.resolve(__dirname, 'keycap-function-row.qml');
+  const result = spawnSync(runner, ['-input', input], {
+    encoding: 'utf8', timeout: 30000,
+    env: {...process.env, QT_QPA_PLATFORM: 'offscreen', QSG_RHI_BACKEND: 'software'},
+  });
+  assert.doesNotMatch(result.stdout + result.stderr, /(?:ReferenceError|TypeError|Unable to assign|QWARN)/,
+                      "the row must render without QML warnings");
+  assert.equal(result.status, 0, `${result.error || ''}\n${result.stdout}\n${result.stderr}`);
+});
+
 // Run the production inline component in Qt Quick, without requiring a live
 // Wayland compositor or the DMS shell. StyledText supplies only font defaults.
 test('keycap geometry and alignment match Keyviz', () => {
