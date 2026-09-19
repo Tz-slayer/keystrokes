@@ -117,7 +117,7 @@ PluginComponent {
     // and "the fix did nothing" then means two very different things. Bump this
     // by hand whenever the event logic changes; it is the only build metadata
     // QML gives us.
-    readonly property string buildStamp: "events.js rev first-key gate + shownKeys (a refused press draws nothing)"
+    readonly property string buildStamp: "events.js rev live-row membership (a released member leaves the row)"
 
     // Configurable settings
     // Every fallback below must equal the matching `defaultValue` in

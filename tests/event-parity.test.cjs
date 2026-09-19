@@ -158,17 +158,30 @@ test('repeat counts require release and do not mutate prior snapshots', () => {
   assert.equal(repeated.groups[0].uid, first.groups[0].uid);
 });
 
-test('replacement mode retains combos until repeated keys prune released members', () => {
+test('replacement mode drops a released member as the next key joins the chord', () => {
+  // The row is the chord being held RIGHT NOW, so it lists only the keys that
+  // are down: Ctrl held, C let go, V arrives reads `Ctrl+V`. Upstream keeps the
+  // C here -- its new-key fallback appends without filtering, while its repress
+  // branch rebuilds the group from the keys still down -- so this is that one
+  // rule applied to both cases.
   let state = down(api.initialState(), 'Ctrl');
   state = down(state, 'C', 1);
   state = api.release(state, 'C', 2);
   state = down(state, 'V', 3);
-  assert.deepEqual(labels(state), [['Ctrl','C','V']]);
+  assert.deepEqual(labels(state), [['Ctrl','V']], 'C goes as V lands, it does not linger');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+
+  // C is a new member if it is pressed again: it starts from one, because its
+  // keycap left the screen with the row that owned it.
   state = api.release(state, 'V', 4);
-  state = down(state, 'V', 5);
-  assert.deepEqual(labels(state), [['Ctrl','V']]);
-  assert.equal(state.groups[0].keys[1].count, 2);
-  state = api.release(api.release(state, 'Ctrl', 6), 'V', 6);
+  state = down(state, 'C', 5);
+  assert.deepEqual(labels(state), [['Ctrl','C']]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+
+  // A row nothing is holding is a finished record, and the next key replaces it
+  // wholesale.
+  state = api.release(state, 'C', 6);
+  state = api.release(state, 'Ctrl', 6);
   state = down(state, 'A', 7);
   assert.deepEqual(labels(state), [['A']]);
 });
@@ -283,6 +296,38 @@ test('history mode: no sequence of keys can put two rows on one uid', () => {
       const uids = state.groups.map(group => group.uid);
       assert.equal(new Set(uids).size, uids.length,
         'two rows share a uid after: ' + state.groups.map(g => g.uid + ':' + g.keys.map(k => k.label).join('+')).join(' | '));
+    }
+  }
+});
+
+test('a key joining a live row never drags a released member along', () => {
+  // Deterministic sweep. A row is the set of keys held RIGHT NOW, so a press
+  // that lands a new key on a live row leaves that row's released members
+  // behind -- in history they stay on the row that owns them, in replacement the
+  // row is rewritten. Upstream's new-key fallback appends without filtering
+  // (`groups[last].keys.push(key)`), which is where `Ctrl+C+V` came from; this
+  // pins the rule across every shape rather than the hand-written cases.
+  const keys = ['Ctrl', 'Shift', 'A', 'B', 'C', 'V'];
+  let seed = 987654321;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (const showEventHistory of [false, true]) {
+    const cfg = {...config, showEventHistory, maxHistory: 5};
+    for (let run = 0; run < 200; run++) {
+      let state = api.initialState(), now = 0, held = [];
+      for (let step = 0; step < 24; step++) {
+        const key = keys[Math.floor(rnd() * keys.length)];
+        if (held.includes(key)) { state = api.release(state, key, now += 5); held = state.heldKeys.slice(); continue; }
+        const row = state.groups[state.groups.length - 1];
+        const wasLive = !!row && row.keys.some(entry => held.includes(entry.label));
+        const isNew = !row || !row.keys.some(entry => entry.label === key);
+        const alreadyUp = row ? row.keys.filter(entry => !held.includes(entry.label)).map(entry => entry.label) : [];
+        state = api.press(state, key, now += 5, cfg);
+        held = state.heldKeys.slice();
+        if (!wasLive || !isNew) continue;
+        const last = state.groups[state.groups.length - 1];
+        assert.equal(last.keys.filter(entry => alreadyUp.includes(entry.label)).length, 0,
+          key + ' dragged a released member along: ' + last.keys.map(entry => entry.label).join('+'));
+      }
     }
   }
 });
@@ -739,20 +784,25 @@ test('a different shortcut keeps the modifier count but drops its partner', () =
   assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [2, 1]);
 });
 
-test('a released member lingers while a live chord is still in progress', () => {
-  // Ctrl+C+V: the user lets go of C to reach V. C stays on the row, because
-  // dropping it the instant it is released would erase the gesture in progress.
+test('a key released while its chord is live is gone by the time the next key lands', () => {
+  // Ctrl+C, then V without letting go of Ctrl. The user released C to reach V,
+  // so C belongs to the keystroke that has just finished: the row shows
+  // `Ctrl+V`, not `Ctrl+C+V`. C does not sit there until it expires.
   let state = api.press(api.initialState(), 'Ctrl', 0, config);
   state = api.press(state, 'C', 1, config);
   state = api.release(state, 'C', 2);
   state = api.press(state, 'V', 3, config);
-  assert.deepEqual(labels(state), [['Ctrl', 'C', 'V']]);
-
-  // Repressing V inside the live chord prunes the member that has gone up.
-  state = api.release(state, 'V', 4);
-  state = api.press(state, 'V', 5, config);
   assert.deepEqual(labels(state), [['Ctrl', 'V']]);
-  assert.equal(state.groups[0].keys[1].count, 2);
+  assert.equal(state.groups[0].keys.filter(key => key.label === 'C').length, 0, 'C is gone, not just hidden');
+  assert.equal(state.groups[0].keys[1].count, 1, 'and nothing of the Ctrl+C press carries onto V');
+
+  // The same rule inside a longer chord: Ctrl+Shift held, C released, V lands.
+  let wide = api.press(api.initialState(), 'Ctrl', 0, config);
+  wide = api.press(wide, 'Shift', 1, config);
+  wide = api.press(wide, 'C', 2, config);
+  wide = api.release(wide, 'C', 3);
+  wide = api.press(wide, 'V', 4, config);
+  assert.deepEqual(labels(wide), [['Ctrl', 'Shift', 'V']]);
 });
 
 test('the deferred press is shown while it is undecided', () => {

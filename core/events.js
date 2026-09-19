@@ -233,15 +233,20 @@ function press(state, label, now, config) {
             // on the theory that a chord starts a fresh count; from the outside
             // that is indistinguishable from the count resetting itself.
             //
-            // The row it interrupted is not thrown away, though. Ctrl pressed
-            // while C has just been released is still `Ctrl+C+V` in the making,
-            // and upstream keeps released members for exactly that reason: the
-            // user let go of C to reach V, not to start over. So the row comes
-            // back with the deferred key at one and the arriving key appended --
-            // but only while it is still live, i.e. while some member of it is
-            // down. A row whose members are all up is a finished record, and a
-            // new keystroke sharing its modifier starts clean (`Ctrl+C` then
-            // `Ctrl+V` reads `Ctrl+V`).
+            // The row it interrupted is let go of, though: a deferred press only
+            // exists when nothing else was down, so that row -- if there is one
+            // -- has all of its members up and is therefore a FINISHED record,
+            // and a new keystroke sharing its modifier starts clean (`Ctrl+C`
+            // let go of completely, then `Ctrl+V`, reads `Ctrl+V`).
+            //
+            // `kept` would be that row's released members, had it been live.
+            // Under the leading-key gate it cannot be: `defers` only fires with
+            // nothing held (`priorHeld.length === 0`), which makes `refutable`
+            // true for every interrupted row of more than one key, and a row of
+            // exactly one key is the deferred key itself, which the filter below
+            // removes. Exhaustively so -- 125k resolving presses over six keys,
+            // both modes, no extras. It is the guard that states the rule, kept
+            // because the answer has to be explicit rather than incidental.
             const live = resolves.reserved.some(function(entry) {
                 return heldKeys.some(function(raw) { return keyId(raw) === keyId(entry.label); });
             }) && !resolves.refutable;
@@ -361,20 +366,29 @@ function press(state, label, now, config) {
         });
         refutable = !chordLive && row.keys.length > 1;
     } else {
-        // A key the row does not already hold. Its members that are no longer
-        // down normally linger -- upstream had it that way, and dropping C the
-        // instant it is released would erase `Ctrl+C+V` the moment V arrives,
-        // exactly when the user is reaching for it.
+        // A key the row does not already hold. A row that is still live is the
+        // chord under the user's fingers RIGHT NOW, so it lists only the keys
+        // that are down: `Ctrl` held, `C` released, `V` arrives reads `Ctrl+V`,
+        // and the C keycap goes as that press lands rather than sitting there
+        // until it expires. Letting go of a key while the chord is still under a
+        // finger really is letting go of it.
         //
-        // Two things end that reprieve. A row that is not live (nothing of it is
-        // down any more) is a finished record rather than a gesture in progress,
-        // so `Ctrl+C` let go of completely and then `Ctrl+V` reads as `Ctrl+V`.
-        // And a key arriving after a deferred press was left open refutes the
-        // repeat that press might have been starting, so the row starts clean.
+        // Upstream is of two minds about this. Its repress branch rebuilds the
+        // group from the keys still in `pressedKeys`, dropping the released ones
+        // -- but the fallback at the end of `onKeyPress` appends the arriving
+        // key and leaves them in place (`groups[last].keys.push(key)`), which is
+        // where `Ctrl+C+V` comes from. This is the first of those two rules,
+        // applied to the case the second one missed.
+        //
+        // A row that is not live is a finished record rather than a gesture in
+        // progress, and a key arriving after a deferred press was left open
+        // refutes the repeat that press might have been starting: either way the
+        // row starts clean (`Ctrl+C` let go of completely, then `Ctrl+V`, reads
+        // `Ctrl+V`).
         const live = row && row.keys.some(function(key) { return was(key); });
-        const survivors = !row ? [] : row.keys.filter(function(key) {
-            return was(key) || (live && !state.pendingRepeat);
-        });
+        // Members still down, which stay; members already up, which go.
+        const survivors = !row ? [] : row.keys.filter(function(key) { return was(key); });
+        const released = !row ? [] : row.keys.filter(function(key) { return !was(key); });
         // In history mode a press that is a NEW keystroke rather than a
         // continuation of the last one opens the next row. Two things make it
         // new, and upstream pushes on the same pair (key_event.ts onKeyPress:
@@ -388,14 +402,17 @@ function press(state, label, now, config) {
         //     mode kept overwriting one row instead of accumulating.
         //   * the last row has a member that is no longer down (`Ctrl+1` let go,
         //     now `Ctrl+2`): the survivor belongs to the keystroke that has just
-        //     finished and keeps its own row rather than lingering in place.
-        // Replacement mode ignores both: the overlay shows a single row and the
-        // member lingers in place.
+        //     finished and keeps its own row rather than being rewritten in
+        //     place. Only a live row (`live`) with no repeat question pending
+        //     can be continued at all; a row nothing is holding has nothing to
+        //     continue.
+        // Replacement mode ignores both: the overlay shows a single row, which
+        // is rewritten in place -- there the released members simply go.
         newRow = config.showEventHistory && (
             heldKeys.length === 1 ||
-            survivors.some(function(key) { return !was(key); })
+            (live && !state.pendingRepeat && released.length > 0)
         );
-        keys = (newRow ? survivors.filter(was) : survivors).map(carryKey).concat(
+        keys = survivors.map(carryKey).concat(
             heldKeys.filter(function(key) {
                 return !survivors.some(function(entry) { return keyId(entry.label) === keyId(key); });
             }).map(function(key) { return newKey(key, now); }));
