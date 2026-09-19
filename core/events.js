@@ -32,6 +32,11 @@
 // repress with nothing held may be the same shortcut retyped (keep the row's
 // members and count them) or a different one sharing a key (drop them). A key
 // the row already holds confirms the repeat, any other key refutes it.
+//
+// A refused press needs no separate bookkeeping. The gate judges the FIRST key
+// of the sequence, so a key it refuses stays the first key for as long as it is
+// held and everything pressed after it is refused too -- there is no moment when
+// a refused press could be folded back in.
 function initialState() {
     return { heldKeys: [], groups: [], nextUid: 1, pendingRepeat: false, pending: null };
 }
@@ -44,36 +49,30 @@ function isModifier(label) {
     return MODIFIER_LABELS.indexOf(label) !== -1;
 }
 
-// keyviz key_event.ts `ignoreEvent` (key_event.ts:217-230), inverted.
+// keyviz key_event.ts `ignoreEvent` (key_event.ts:217-230). The FIRST key of the
+// sequence decides: a shortcut is `Ctrl` and then something, never the reverse.
+// `Ctrl+C` shows, `C+Ctrl` does not -- the modifier has to lead.
 //
-// Upstream decides this from `pressedKeys[0]` ALONE -- the first key of the
-// sequence. That is fine when a human rolls Ctrl and then C a comfortable
-// moment apart, and it is why "A then Ctrl" is not treated as a hotkey. It
-// falls apart the moment both keys land in the same millisecond: which one the
-// kernel reports first is then a race, so the identical gesture is shown or
-// discarded depending on the winner. From the outside that looks like "two keys
-// pressed together, only one is recognised", or like a timing threshold that is
-// too strict -- there is no threshold involved at all.
+// `labels` is every key currently down, oldest first, so `labels[0]` is the key
+// the gesture started with. A refused key stays in `heldKeys`, which makes it
+// that first key for as long as it is held: everything pressed after it is
+// refused too -- the same shape upstream gets from `pressedKeys[0]`.
 //
-// So the gate here asks whether the SEQUENCE contains a modifier, not whether
-// the first key is one. `Ctrl+C` and `C+Ctrl` then both show, and every key of
-// the pair keeps its own press count, which is what the overlay should do while
-// two keys are held together.
-//
-// `previousLabels` is what the group already holds, because the gate runs on
-// press: when a modifier arrives second, the key that beat it is already in the
-// group, and a helper key like C must not veto the chord it belongs to.
-function isAllowedSequence(labels, previousLabels, filter, allowedKeys) {
+// The price is deliberate and worth stating: when two keys land in the same
+// millisecond, which one the kernel reports first is a race, so a chord typed as
+// one motion is shown or dropped on that coin flip. Upstream behaves the same
+// way. This plugin used to accept a modifier ANYWHERE in the sequence to dodge
+// that race, which also accepted `C` then `Ctrl` -- a sequence that is not a
+// shortcut.
+function isAllowedSequence(labels, filter, allowedKeys) {
     if (!filter || filter === "none") return true;
     if (!labels || labels.length === 0) return true;
     const set = filter === "modifiers" ? MODIFIER_LABELS : (allowedKeys || []);
-    return labels.concat(previousLabels || []).some(function(label) {
-        return set.indexOf(label) !== -1;
-    });
+    return set.indexOf(labels[0]) !== -1;
 }
 
 function shouldShow(filter, heldLabels, allowedKeys) {
-    return isAllowedSequence(heldLabels, null, filter, allowedKeys);
+    return isAllowedSequence(heldLabels, filter, allowedKeys);
 }
 
 function newKey(label, now, animateIn) {
@@ -122,16 +121,11 @@ function press(state, label, now, config) {
     const row = state.groups[state.groups.length - 1];
     const chordLive = !!row && row.keys.some(function(key) { return was(key); });
 
-    // A key that is STILL DOWN when this press arrives. Only those are part of
-    // the gesture in progress. Members the row still lists but that have been
-    // released belong to a keystroke that is over: letting one of them speak
-    // for this press is how `Ctrl`, release, `R` qualified as a hotkey and put
-    // a lone `R` on screen. Upstream asks the same question of `pressedKeys`,
-    // which holds only the physically held keys (key_event.ts ignoreEvent).
-    const previousLabels = row ? row.keys.filter(function(key) {
-        return heldKeys.some(function(raw) { return keyId(raw) === keyId(key.label); });
-    }).map(function(key) { return keyId(key.label); }) : [];
-    if (!isAllowedSequence(heldKeys, previousLabels, config.eventFilter, config.allowedKeys))
+    // The gate looks at the whole of `heldKeys` and judges only its first entry,
+    // so a refused key stays in charge for as long as it is down. Members the
+    // row still lists but that have been released are NOT in `heldKeys` at all,
+    // which is what keeps `Ctrl`, release, `R` from qualifying as `Ctrl+R`.
+    if (!isAllowedSequence(heldKeys, config.eventFilter, config.allowedKeys))
         return {
             heldKeys: heldKeys,
             groups: state.groups,
@@ -189,8 +183,7 @@ function press(state, label, now, config) {
             settled: settled,
             reserved: resumed.reserved,
             refutable: resumed.refutable,
-            oldGroups: resumed.oldGroups,
-            oldNextUid: resumed.oldNextUid
+            oldGroups: resumed.oldGroups
         };
     } else if (resolves) {
         // The deferred press turns out to be the first key of this chord after
@@ -218,7 +211,12 @@ function press(state, label, now, config) {
                 return { label: entry.label, count: entry.count, lastPressedAt: entry.lastPressedAt, animateIn: false };
             });
             history = resolves.oldGroups;
-            nextUid = resolves.oldNextUid;
+            // `nextUid` deliberately does NOT roll back with the provisional row.
+            // This row takes the provisional uid over -- it lands in the same
+            // slot, so the delegate is reused rather than rebuilt -- but the
+            // counter has to stay past that uid: a rolled-back counter hands the
+            // very next row a uid that is still on screen, and Overlay.qml keys
+            // its rows by uid, so two rows sharing one uid collapse into one.
         } else {
             // A different chord, not a retype: the deferred press was this
             // keystroke's modifier all along. Its count stays at `settled + 1`
@@ -259,7 +257,8 @@ function press(state, label, now, config) {
             };
             keys = [modifier].concat(kept).concat([newKey(named, now)]);
             history = resolves.oldGroups;
-            nextUid = resolves.oldNextUid;
+            // As in the retyped path: the provisional uid is taken over, so the
+            // counter stays past it instead of rolling back onto it.
         }
     } else if (defers) {
         // The ambiguous press. Its provisional count is `settled + 1`, where
@@ -297,8 +296,7 @@ function press(state, label, now, config) {
                 return { label: key.label, count: key.count, lastPressedAt: key.lastPressedAt, animateIn: key.animateIn };
             }) : [],
             refutable: refutable,
-            oldGroups: state.groups,
-            oldNextUid: state.nextUid
+            oldGroups: state.groups
         };
         newRow = !alone;
         // A new row is pushed on top of what is there; a continued row replaces
@@ -369,12 +367,26 @@ function press(state, label, now, config) {
         const survivors = !row ? [] : row.keys.filter(function(key) {
             return was(key) || (live && !state.pendingRepeat);
         });
-        // In history mode a member that is no longer down belongs to the
-        // keystroke that has just finished, so it keeps its own row and the new
-        // press opens the next one: `Ctrl+1` then `Ctrl+2` is two rows, not one
-        // row growing a third keycap. In replacement mode the overlay shows a
-        // single row and the member lingers in place.
-        newRow = config.showEventHistory && survivors.some(function(key) { return !was(key); });
+        // In history mode a press that is a NEW keystroke rather than a
+        // continuation of the last one opens the next row. Two things make it
+        // new, and upstream pushes on the same pair (key_event.ts onKeyPress:
+        // `pressedKeys.length === 1 || last < 0` in the single-key case, and
+        // `groups[last].keys.some(gKey => !gKey.in(pressedKeys))` in the combo
+        // case):
+        //   * the arriving key is the only one down. Nothing of the previous row
+        //     is held, so it cannot be that keystroke continuing -- it is a
+        //     finished record and `A` released then `B` must be two rows. This
+        //     clause was missing, which is why typing single keys in history
+        //     mode kept overwriting one row instead of accumulating.
+        //   * the last row has a member that is no longer down (`Ctrl+1` let go,
+        //     now `Ctrl+2`): the survivor belongs to the keystroke that has just
+        //     finished and keeps its own row rather than lingering in place.
+        // Replacement mode ignores both: the overlay shows a single row and the
+        // member lingers in place.
+        newRow = config.showEventHistory && (
+            heldKeys.length === 1 ||
+            survivors.some(function(key) { return !was(key); })
+        );
         keys = (newRow ? survivors.filter(was) : survivors).map(carryKey).concat(
             heldKeys.filter(function(key) {
                 return !survivors.some(function(entry) { return keyId(entry.label) === keyId(key); });

@@ -117,7 +117,7 @@ PluginComponent {
     // and "the fix did nothing" then means two very different things. Bump this
     // by hand whenever the event logic changes; it is the only build metadata
     // QML gives us.
-    readonly property string buildStamp: "events.js rev b486dc9 (deferred modifier)"
+    readonly property string buildStamp: "events.js rev first-key gate (the modifier must lead)"
 
     // Configurable settings
     // Every fallback below must equal the matching `defaultValue` in
@@ -139,10 +139,9 @@ PluginComponent {
     // clicks, drags and the wheel straight into `onKeyPress` and lets
     // `ignoreEvent` decide them with everything else. So a bare click or wheel
     // tick is dropped by the default "modifiers" filter, while Ctrl+click and
-    // Ctrl+wheel are shown. The gate asks whether any key of the sequence is a
-    // modifier, so it does not depend on which one was pressed first. The label
-    // is appended when it is not on `heldKeys` yet, mirroring upstream's
-    // push-then-test order.
+    // Ctrl+wheel are shown. The gate judges the FIRST key of the sequence, so
+    // the modifier has to be down before the click. The label is appended when
+    // it is not on `heldKeys` yet, mirroring upstream's push-then-test order.
     function eventAllowed(label) {
         const held = root.heldKeys.indexOf(label) !== -1
             ? root.heldKeys : root.heldKeys.concat([label]);

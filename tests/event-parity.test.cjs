@@ -11,27 +11,85 @@ function tap(state, key, now = 0, overrides = {}) {
 }
 function freeze(value) { Object.values(value).forEach(item => { if (item && typeof item === 'object') freeze(item); }); return Object.freeze(value); }
 
-// keyviz decides the gate from `pressedKeys[0]` alone. Here it asks whether the
-// sequence CONTAINS a modifier instead, because when two keys land in the same
-// millisecond the kernel picks which one is "first" and the identical gesture
-// would otherwise be shown or discarded on that coin flip.
-test('a modifier filter shows a sequence once any of its keys is a modifier', () => {
+// keyviz decides the gate from `pressedKeys[0]` alone: the modifier has to LEAD.
+// `Ctrl` then `C` is a shortcut, `C` then `Ctrl` is not -- a sequence that began
+// with a plain key is not a shortcut with a modifier bolted on afterwards.
+test('a modifier filter only accepts a sequence that starts with a modifier', () => {
   // A lone modifier always shows, whatever the filter.
   for (const label of ['Ctrl', 'Shift', 'Alt', 'Super', 'Fn']) {
     assert.deepEqual(labels(down(api.initialState(), label, 0, {eventFilter:'modifiers'})), [[label]]);
   }
-  // Ctrl+C and C+Ctrl are the same gesture and must both show, with each key
-  // carrying its own count. The order they arrive in is a race, not a decision.
+  // The modifier leads: shown, with each key carrying its own count.
   assert.deepEqual(labels(api.press(down(api.initialState(), 'Ctrl', 0, {eventFilter:'modifiers'}),
                                     'C', 1, {eventFilter:'modifiers'})), [['Ctrl', 'C']]);
+  // A plain key that arrived first keeps the sequence out, however long the
+  // modifier then stays down: `labels[0]` is still that plain key.
   assert.deepEqual(labels(down(down(api.initialState(), 'C', 0, {eventFilter:'modifiers'}),
-                               'Ctrl', 1, {eventFilter:'modifiers'})), [['C', 'Ctrl']],
-    'the modifier arriving second is still a hotkey');
+                               'Ctrl', 1, {eventFilter:'modifiers'})), [],
+    'C then Ctrl is not a shortcut');
   // Two keys with no modifier in sight are still not a hotkey.
   assert.deepEqual(labels(down(down(api.initialState(), 'A', 0, {eventFilter:'modifiers'}),
                                'B', 1, {eventFilter:'modifiers'})), []);
   // A lone non-modifier is not one either.
   assert.deepEqual(labels(down(api.initialState(), 'Caps Lock', 0, {eventFilter:'modifiers'})), []);
+});
+
+test('a refused key keeps the gate closed while it stays down', () => {
+  // The price of leading-key semantics, pinned so it cannot drift: a refused key
+  // is still in `heldKeys`, so it IS the sequence's first key until it comes up,
+  // and everything pressed under it is refused too. Rolling onto the modifier a
+  // moment late therefore shows nothing rather than a misordered chord -- and the
+  // modifier shows alone as soon as the plain key is out of the way.
+  const hotkeys = {eventFilter: 'modifiers'};
+  let state = down(api.initialState(), 'C', 0, hotkeys);
+  state = down(state, 'Ctrl', 1, hotkeys);
+  assert.deepEqual(labels(state), [], 'the refused C leads, so Ctrl is refused with it');
+  assert.deepEqual(plain(state.heldKeys), ['C', 'Ctrl'], 'both are held, neither is drawn');
+
+  state = api.release(state, 'C', 2);
+  state = api.release(state, 'Ctrl', 3);
+  state = down(state, 'Ctrl', 4, hotkeys);
+  assert.deepEqual(labels(state), [['Ctrl']], 'with C out of the way the modifier stands alone');
+});
+
+test('a plain key released before the modifier was never part of a chord', () => {
+  // The other half of leading-key semantics: once the plain key is up it is out
+  // of `heldKeys` entirely, so the modifier that follows starts a gesture of its
+  // own. `Ctrl` released then `R` is not `Ctrl+R`, and neither is `C` then
+  // release then `Ctrl`.
+  const hotkeys = {eventFilter: 'modifiers'};
+  let state = down(api.initialState(), 'C', 0, hotkeys);
+  assert.deepEqual(labels(state), [], 'a lone C is not a hotkey');
+  state = api.release(state, 'C', 1);
+  state = down(state, 'Ctrl', 2, hotkeys);
+  assert.deepEqual(labels(state), [['Ctrl']], 'the finished press must not resurface');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1]);
+});
+
+test('history mode: a late modifier leaves the previous row alone', () => {
+  // `Ctrl+A`, let go, then `C` before `Ctrl`: not a shortcut, so the finished
+  // `Ctrl+A` row keeps its members. It used to gain one -- the refused C made the
+  // Ctrl press look like a repress onto that row, which keeps its members, and
+  // the overlay drew a single `Ctrl+A+C`.
+  const history = {eventFilter: 'modifiers', showEventHistory: true, maxHistory: 5};
+  let state = down(api.initialState(), 'Ctrl', 0, history);
+  state = down(state, 'A', 1, history);
+  state = api.release(state, 'A', 2);
+  state = api.release(state, 'Ctrl', 3);
+  assert.deepEqual(labels(state), [['Ctrl', 'A']]);
+
+  state = down(state, 'C', 4, history);
+  state = down(state, 'Ctrl', 5, history);
+  assert.deepEqual(labels(state), [['Ctrl', 'A']], 'nothing is added and nothing is redrawn');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+
+  // With the modifier leading, the same chord is a second, separate row.
+  state = api.release(state, 'C', 6);
+  state = api.release(state, 'Ctrl', 7);
+  state = down(state, 'Ctrl', 8, history);
+  state = down(state, 'C', 9, history);
+  assert.deepEqual(labels(state), [['Ctrl', 'A'], ['Ctrl', 'C']]);
+  assert.deepEqual(plain(state.groups[1].keys.map(key => key.count)), [2, 1]);
 });
 
 test('repeat counts require release and do not mutate prior snapshots', () => {
@@ -103,6 +161,76 @@ test('history standalone repeated key increments count in its group', () => {
   state = down(state, 'A', 2, {showEventHistory:true});
   assert.equal(state.groups.length, 1);
   assert.equal(state.groups[0].keys[0].count, 2);
+});
+
+test('history mode: a tapped key does not overwrite the row before it', () => {
+  // Typing A then B then C is three keystrokes, so history shows three rows.
+  // Upstream pushes a new group whenever the arriving key is the only one down
+  // (`pressedKeys.length === 1` in key_event.ts onKeyPress); without that clause
+  // the second key overwrote the first and the whole mode showed one row.
+  const h = {showEventHistory:true, maxHistory:5};
+  let state = tap(api.initialState(), 'A', 0, h);
+  state = tap(state, 'B', 10, h);
+  state = tap(state, 'C', 20, h);
+  assert.deepEqual(labels(state), [['A'], ['B'], ['C']]);
+});
+
+test('history mode: maxHistory keeps only the newest rows', () => {
+  const h = {showEventHistory:true, maxHistory:2};
+  let state = api.initialState();
+  ['A', 'B', 'C', 'D'].forEach((key, index) => { state = tap(state, key, index * 10, h); });
+  assert.deepEqual(labels(state), [['C'], ['D']]);
+});
+
+test('history mode: every row on screen keeps a distinct uid', () => {
+  // Overlay.qml keys its rows by uid (ListModelSync.reconcile + OverlayLayout
+  // .byId), so two rows sharing one uid collapse into a single row on screen and
+  // the layout gives them the same position. Distinctness is load-bearing.
+  const h = {showEventHistory:true, maxHistory:5};
+  let state = tap(api.initialState(), 'A', 0, h);
+  state = tap(state, 'B', 10, h);
+  state = tap(state, 'C', 20, h);
+  const uids = state.groups.map(group => group.uid);
+  assert.deepEqual(plain(uids), [1, 2, 3]);
+});
+
+test('history mode: a chord does not alias the uid of the row it takes over', () => {
+  // A deferred modifier shows a provisional row; the key that resolves it lands
+  // in that same slot and reuses its uid so the delegate is not rebuilt. The
+  // counter, though, must stay PAST that uid -- rolling it back handed the next
+  // row a uid that was still on screen, and the two then collapsed into one.
+  const h = {showEventHistory:true, maxHistory:5};
+  let state = down(api.initialState(), 'Ctrl', 0, h);        // provisional
+  const provisional = state.groups[0].uid;
+  state = down(state, 'C', 1, h);                            // resolves onto it
+  assert.equal(state.groups[0].uid, provisional, 'the chord takes the row over');
+  state = api.release(state, 'C', 2);
+  state = down(state, 'V', 3, h);                            // the next keystroke
+  assert.equal(state.groups.length, 2);
+  assert.notEqual(state.groups[1].uid, state.groups[0].uid,
+    'a new row must not reuse a uid that is still on screen');
+});
+
+test('history mode: no sequence of keys can put two rows on one uid', () => {
+  // Deterministic sweep over mixed modifier/letter sequences. The overlay keys
+  // its rows by uid, so a collision anywhere collapses two rows into one; this
+  // pins the invariant across every shape the state machine can reach, rather
+  // than the handful the hand-written cases cover.
+  const history = {...config, showEventHistory: true, maxHistory: 5};
+  const keys = ['Ctrl', 'Shift', 'A', 'B', 'C', 'V'];
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let run = 0; run < 200; run++) {
+    let state = api.initialState(), now = 0, held = [];
+    for (let step = 0; step < 24; step++) {
+      const key = keys[Math.floor(rnd() * keys.length)];
+      if (held.includes(key)) { state = api.release(state, key, now += 5); held = held.filter(k => k !== key); }
+      else { state = api.press(state, key, now += 5, history); held.push(key); }
+      const uids = state.groups.map(group => group.uid);
+      assert.equal(new Set(uids).size, uids.length,
+        'two rows share a uid after: ' + state.groups.map(g => g.uid + ':' + g.keys.map(k => k.label).join('+')).join(' | '));
+    }
+  }
 });
 
 // ── count while several keys are held together ────────────────────────────────
@@ -353,11 +481,9 @@ test('unknown releases and unchanged ticks preserve state identity', () => {
   assert.equal(api.tick(state, 99999, config), state);
 });
 
-// The gate. It asks whether the sequence CONTAINS a modifier rather than
-// whether the first key is one, because "first" is a race between two keys
-// pressed together -- the same gesture must not depend on which one the kernel
-// happened to report first.
-test('the filter gate accepts a sequence containing any modifier', () => {
+// The gate. It judges the FIRST key of the sequence -- the key the gesture
+// started with -- which is upstream's `pressedKeys[0]` rule.
+test('the filter gate judges the first key of the sequence', () => {
   const show = (filter, held, allowed) => api.shouldShow(filter, held, allowed);
 
   // "none" shows everything.
@@ -372,21 +498,21 @@ test('the filter gate accepts a sequence containing any modifier', () => {
   for (const key of ['A', '1', 'Enter', 'F5'])
     assert.equal(show('modifiers', [key]), false, `${key} alone must be hidden`);
 
-  // Order no longer decides: both spellings of the same chord are hotkeys.
+  // The modifier has to lead -- `A` then `Ctrl` is not `Ctrl+A`.
   assert.equal(show('modifiers', ['Ctrl', 'A']), true);
-  assert.equal(show('modifiers', ['A', 'Ctrl']), true, 'the modifier need not be first');
+  assert.equal(show('modifiers', ['A', 'Ctrl']), false, 'the modifier must be first');
   assert.equal(show('modifiers', ['Shift', 'A']), true, 'Shift is a modifier');
-  assert.equal(show('modifiers', ['A', 'Shift']), true);
-  assert.equal(show('modifiers', ['Ctrl', 'Shift', 'A']), true);
+  assert.equal(show('modifiers', ['A', 'Shift']), false);
+  assert.equal(show('modifiers', ['Ctrl', 'Shift', 'A']), true, 'only the first key is judged');
 
-  // No modifier anywhere in the sequence: still not a hotkey.
+  // No modifier at all: still not a hotkey.
   assert.equal(show('modifiers', ['A', 'B']), false);
 
-  // "custom" swaps the modifier set for allowedKeys, same containment rule.
+  // "custom" swaps the modifier set for allowedKeys and applies the same rule.
   assert.equal(show('custom', ['Space'], ['Space']), true);
   assert.equal(show('custom', ['A'], ['Space']), false);
   assert.equal(show('custom', ['Space', 'B'], ['Space']), true);
-  assert.equal(show('custom', ['B', 'Space'], ['Space']), true, 'allowed key need not be first');
+  assert.equal(show('custom', ['B', 'Space'], ['Space']), false, 'the allowed key must be first');
   assert.equal(show('custom', ['B', 'C'], ['Space']), false);
   assert.equal(show('custom', ['Ctrl'], []), false);
 });
@@ -397,11 +523,10 @@ test('the gate tolerates an empty or absent filter', () => {
   assert.equal(api.shouldShow('modifiers', []), true);
 });
 
-// The gate has to look at the keys already held, not just the new one: it runs
-// on press, so when Ctrl arrives second the key that beat it is already in
-// `heldKeys` and must not veto the chord -- and it must not be left stranded
-// there either, or it would never reach the screen.
-test('a helper key already held does not veto a late modifier', () => {
+// The gate judges the FIRST key of the sequence, so a key it refused keeps the
+// sequence out for as long as it stays down: the late modifier neither rescues
+// it nor is drawn beside it.
+test('a held plain key keeps a late modifier off the screen', () => {
   const cfg = { eventFilter: 'modifiers', allowedKeys: [], showEventHistory: false, maxHistory: 5, fadeTimeout: 5000 };
 
   // C alone is rejected by the filter, so nothing is on screen yet.
@@ -409,10 +534,9 @@ test('a helper key already held does not veto a late modifier', () => {
   assert.deepEqual(labels(state), [], 'a lone C is not a hotkey');
   assert.deepEqual(plain(state.heldKeys), ['C'], 'but it is remembered as held');
 
-  // Ctrl lands: the whole chord is now a hotkey, and C comes back with it.
+  // Ctrl lands, and the sequence still starts with C: refused along with it.
   state = api.press(state, 'Ctrl', 1, cfg);
-  assert.deepEqual(labels(state), [['C', 'Ctrl']], 'the late modifier opens the chord');
-  assert.equal(state.groups.length, 1, 'the chord is one row, not two');
+  assert.deepEqual(labels(state), [], 'C leads, so this is not a shortcut');
 
   // And the normal order still lands in a single group.
   let other = api.press(api.initialState(), 'Ctrl', 0, cfg);
@@ -646,14 +770,14 @@ test('a held modifier still qualifies the key pressed with it', () => {
   assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
 });
 
-test('a released helper key does not veto the chord it starts', () => {
-  // The mirror image, and the reason the gate looks at the whole sequence
-  // rather than the first key: R first and Ctrl while R is still down is the
-  // same gesture as Ctrl+R, and the order they land in is a race.
+test('a plain key is not rescued by a modifier that arrives on top of it', () => {
+  // The mirror image: R first, then Ctrl while R is still down. The sequence
+  // began with a plain key, so it is not a shortcut -- a modifier arriving
+  // second does not turn it into one.
   const cfg = {...config, eventFilter: 'modifiers'};
   let state = api.press(api.initialState(), 'R', 0, cfg);
   state = api.press(state, 'Ctrl', 1, cfg);
-  assert.deepEqual(labels(state), [['R', 'Ctrl']]);
+  assert.deepEqual(labels(state), []);
 });
 
 // ── a count lives exactly as long as its keycap ───────────────────────────────
