@@ -14,7 +14,17 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const DOCS = ["README.md"];
+// README plus everything in docs/. The manual is organised general-to-specific:
+// docs/index.md is the hub and every other file hangs off it, so a stale link
+// there is the difference between a map and a dead end.
+const DOCS = [
+    "README.md",
+    ...fs
+        .readdirSync(path.join(ROOT, "docs"))
+        .filter((f) => f.endsWith(".md"))
+        .sort()
+        .map((f) => path.join("docs", f)),
+];
 
 // GitHub's anchor algorithm, good enough for Latin + CJK headings.
 function slug(text) {
