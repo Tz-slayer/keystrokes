@@ -614,6 +614,48 @@ test('a modifier filter still admits a deferred modifier', () => {
   assert.equal(state.groups.length, 1, 'the wheel must not open a second row');
 });
 
+// ── a gesture ends when its keys come up ──────────────────────────────────────
+//
+// Upstream asks the filter about `pressedKeys`, which holds only the keys that
+// are physically down (key_event.ts ignoreEvent: `MODIFIERS.has(pressedKeys[0])`).
+// A Ctrl that has been let go of is not in it, so it cannot make the next key
+// look like a hotkey: `Ctrl`, release, `R` is two separate presses and upstream
+// shows the Ctrl and drops the R. Two things here used to disagree with that --
+// the gate counted members the row still listed even after their release, and
+// the deferral claimed the next key regardless of whether its modifier was
+// still held. Together they put a lone `R` on screen, labelled Ctrl+R.
+test('a released modifier does not qualify the key that follows it', () => {
+  const cfg = {...config, eventFilter: 'modifiers'};
+  let state = api.press(api.initialState(), 'Ctrl', 0, cfg);
+  state = api.release(state, 'Ctrl', 1);
+  state = api.press(state, 'R', 2, cfg);
+
+  // R was pressed on its own, so it is not a hotkey and must not appear. The
+  // Ctrl is still on screen -- it lingers until its own fade runs out.
+  assert.deepEqual(labels(state), [['Ctrl']],
+    'R must not be shown, and must not be merged into a Ctrl+R either');
+  assert.equal(state.groups[0].keys[0].count, 1, 'the Ctrl was pressed once');
+});
+
+test('a held modifier still qualifies the key pressed with it', () => {
+  // The real hotkey, for contrast: Ctrl is still down when R arrives.
+  const cfg = {...config, eventFilter: 'modifiers'};
+  let state = api.press(api.initialState(), 'Ctrl', 0, cfg);
+  state = api.press(state, 'R', 1, cfg);
+  assert.deepEqual(labels(state), [['Ctrl', 'R']]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+});
+
+test('a released helper key does not veto the chord it starts', () => {
+  // The mirror image, and the reason the gate looks at the whole sequence
+  // rather than the first key: R first and Ctrl while R is still down is the
+  // same gesture as Ctrl+R, and the order they land in is a race.
+  const cfg = {...config, eventFilter: 'modifiers'};
+  let state = api.press(api.initialState(), 'R', 0, cfg);
+  state = api.press(state, 'Ctrl', 1, cfg);
+  assert.deepEqual(labels(state), [['R', 'Ctrl']]);
+});
+
 // ── end to end: the raw input line through to the row ─────────────────────────
 //
 // Every test above feeds the state machine labels directly and runs on

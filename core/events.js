@@ -122,10 +122,15 @@ function press(state, label, now, config) {
     const row = state.groups[state.groups.length - 1];
     const chordLive = !!row && row.keys.some(function(key) { return was(key); });
 
-    // What is already in the last group is part of the same physical gesture:
-    // the gate runs before the group is updated, so when the modifier arrives
-    // second the helper key is already sitting there.
-    const previousLabels = row ? row.keys.map(function(key) { return keyId(key.label); }) : [];
+    // A key that is STILL DOWN when this press arrives. Only those are part of
+    // the gesture in progress. Members the row still lists but that have been
+    // released belong to a keystroke that is over: letting one of them speak
+    // for this press is how `Ctrl`, release, `R` qualified as a hotkey and put
+    // a lone `R` on screen. Upstream asks the same question of `pressedKeys`,
+    // which holds only the physically held keys (key_event.ts ignoreEvent).
+    const previousLabels = row ? row.keys.filter(function(key) {
+        return heldKeys.some(function(raw) { return keyId(raw) === keyId(key.label); });
+    }).map(function(key) { return keyId(key.label); }) : [];
     if (!isAllowedSequence(heldKeys, previousLabels, config.eventFilter, config.allowedKeys))
         return {
             heldKeys: heldKeys,
@@ -143,7 +148,15 @@ function press(state, label, now, config) {
     // other key, which is exactly the evidence the deferral was waiting for.
     const carried = state.pending;
     const resumed = carried && keyId(carried.key) === named ? carried : null;
-    const resolves = carried && !resumed ? carried : null;
+    // A deferred modifier only opens a chord while it is still down. Let go
+    // before the partner arrives, it was a tap, and the partner starts its own
+    // gesture: `Ctrl`, release, `R` is two separate presses, not Ctrl+R. The
+    // deferral therefore survives the release but stops claiming the next key
+    // the moment that key can see the modifier is no longer held.
+    const carriedLive = !!carried && heldKeys.some(function(raw) {
+        return keyId(raw) === keyId(carried.key);
+    });
+    const resolves = carried && !resumed && carriedLive ? carried : null;
     // A modifier pressed with nothing else down, while no question is already
     // open, is the ambiguous press this whole mechanism exists for. Anywhere
     // else there is nothing to defer: a chord in flight has already been
