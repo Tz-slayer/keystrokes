@@ -75,3 +75,44 @@ test('every imported module path resolves', () => {
     }
   }
 });
+
+// A QML file's name IS a type name: everything in the same directory -- and in
+// any directory imported with `import "<dir>"` -- sees it as that type, and the
+// implicit import outranks module imports. Naming a file `Row.qml` therefore
+// shadows QtQuick's Row everywhere near it, and the first layout usage that
+// assigns `spacing:` fails the whole page at compile time. That is exactly how
+// the settings page went empty: the rename to Row.qml left every `Row {` in
+// settings/ instantiating the row chrome, and DMS rendered nothing.
+//
+// No plugin QML file may share a name with a type that QtQuick ships.
+test('no QML file name shadows a QtQuick built-in type', () => {
+  const builtins = new Set([
+    // QtQuick core
+    'Item', 'Rectangle', 'Text', 'Image', 'BorderImage', 'AnimatedImage',
+    'Row', 'Column', 'Flow', 'Grid', 'Flickable', 'Flipable', 'Loader',
+    'FocusScope', 'MouseArea', 'PinchArea', 'WheelHandler', 'HoverHandler',
+    'DragHandler', 'TapHandler', 'PointHandler', 'Repeater', 'Timer',
+    'Connections', 'Canvas', 'Gradient', 'GradientStop', 'SystemPalette',
+    'FontLoader', 'Font', 'TextMetrics', 'Screen', 'Color', 'VectorImage',
+    'TextEdit', 'TextInput', 'TextArea', 'TextField', 'PathView', 'PathText',
+    'MultiPointTouchArea', 'ShaderEffect', 'ShaderEffectSource', 'SpringAnimation',
+    'NumberAnimation', 'ColorAnimation', 'SequentialAnimation', 'ParallelAnimation',
+    'PropertyAnimation', 'Behavior', 'Scale', 'Rotation', 'Translate', 'Transform',
+    // QtQuick.Layouts / Controls / Window / Dialogs / Templates
+    'ColumnLayout', 'RowLayout', 'GridLayout', 'StackLayout',
+    'Button', 'CheckBox', 'ComboBox', ' Dial', 'Frame', 'GroupBox', 'Label',
+    'ProgressBar', 'RadioButton', 'ScrollBar', 'ScrollIndicator', 'Slider',
+    'SpinBox', 'StackView', 'SwipeView', 'Switch', 'TabBar', 'TabButton',
+    'TextArea', 'TextField', 'ToolBar', 'ToolButton', 'Tumbler', 'Menu',
+    'MenuItem', 'Dialog', 'DialogButtonBox', 'Popup', 'ToolTip', 'SplitView',
+    'ApplicationWindow', 'Window', 'Page', 'Pane', 'Control', 'Separator',
+  ]);
+
+  for (const file of all.filter(f => f.endsWith('.qml'))) {
+    const name = path.basename(file, '.qml');
+    assert.ok(!builtins.has(name.trim()),
+      `${file}: the type name "${name}" shadows a QtQuick built-in. Same-directory `
+      + `and directory-imported files would resolve the name to this file instead, `
+      + `breaking their layout usages at compile time. Rename it.`);
+  }
+});

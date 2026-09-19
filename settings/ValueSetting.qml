@@ -9,7 +9,7 @@ import qs.Widgets
 //
 // The row chrome (label, info tooltip, reset affordance, hover) comes from
 // Row, so these rows look like the vendored `*SettingPlus` ones.
-Row {
+SettingRow {
     id: root
 
     // `label`, `description`, `isDirty`, `showReset` and the control slots are

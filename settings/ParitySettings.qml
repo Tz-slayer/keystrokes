@@ -76,7 +76,7 @@ Column {
             settingKey: "monitorName"; label: I18n.tr("Display")
             options: root.monitorOptions; defaultValue: OverlayLayout.followFocusValue()
         }
-        Row {
+        SettingRow {
             label: I18n.tr("Link horizontal and vertical margins")
             description: I18n.tr("Move both margins together.")
             clickable: true

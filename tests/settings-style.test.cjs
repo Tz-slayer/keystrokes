@@ -15,7 +15,7 @@ const ALLOWED = new Set([
   'StyledText', 'DankButton', 'DankDropdown', 'DankToggle', 'DankIcon', 'DankTextField',
   'SettingsCard', 'SectionTitle', 'UsageGuide', 'PluginAbout', 'CopyBox',
   'ToggleSettingPlus', 'SelectionSettingPlus', 'SliderSettingPlus',
-  'Row', 'ValueSetting', 'ParitySettings',
+  'SettingRow', 'ValueSetting', 'ParitySettings',
   'ColorRow', 'ColorSwatch',
   'PluginSettings',
   // container/plumbing types a page may need around the rows
@@ -48,12 +48,14 @@ test('no stock Qt Quick control and no divider survives in the settings UI', () 
 });
 
 test('every settings row carries a label', () => {
-  // settings/Row.qml is used as a plain `Row {`, which Qt Quick's own layout
-  // container also spells. They are told apart by the first property: a settings
-  // row always opens with `label:`, a layout container with spacing/anchors or
-  // nested children. So this checks the ones that already look like settings
-  // rows (they must stay labelled) plus every other row type unconditionally.
-  const ROW_TYPES = 'ValueSetting|ColorRow|SelectionSettingPlus|ToggleSettingPlus|SliderSettingPlus';
+  // The plugin's row chrome is `SettingRow` -- deliberately not spelled `Row`,
+  // which is Qt Quick's own layout container. The two used to collide: when the
+  // chrome file was named Row.qml, every plain `Row {` in these pages resolved
+  // to the chrome instead of the layout, and `spacing:` (unknown on the chrome)
+  // failed the whole page at compile time -- the settings opened empty. So the
+  // split below is load-bearing: `SettingRow` must carry a label, and a plain
+  // `Row` must NEVER look like a settings row.
+  const ROW_TYPES = 'SettingRow|ValueSetting|ColorRow|SelectionSettingPlus|ToggleSettingPlus|SliderSettingPlus';
 
   for (const page of pages) {
     const source = fs.readFileSync(path.join(ROOT, page), 'utf8');
@@ -63,12 +65,14 @@ test('every settings row carries a label', () => {
       assert.match(body, /\blabel:/, `a ${name} in ${page} has no label`);
     }
 
-    // Plain `Row {` must be either a labelled settings row or a layout
-    // container; a bare row with neither a label nor any child is a mistake.
+    // A plain `Row {` is the layout container only. One that opens with
+    // `label:` is someone reaching for the chrome under the old spelling, and
+    // would not even compile now that the chrome lives in SettingRow.
     for (const [, body] of source.matchAll(/^\s*Row\s*\{([\s\S]*?)\n\s*\}/gm)) {
-      const isSettingsRow = /^\s*label\s*:/.test(body);
+      assert.doesNotMatch(body, /^\s*label\s*:/,
+        `a plain Row in ${page} looks like a settings row; use SettingRow`);
       const isLayout = /^\s*(spacing|[a-z]+\.[a-z]+)\s*:/.test(body) || /[A-Z]\w*\s*\{/.test(body);
-      assert.ok(isSettingsRow || isLayout,
+      assert.ok(isLayout,
         `a Row in ${page} is neither a labelled settings row nor a layout container`);
     }
   }

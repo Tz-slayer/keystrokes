@@ -65,7 +65,7 @@ import "core/keyStyle.js" as KeyStyle
 
     SettingsCard {
         SectionTitle { text: I18n.tr("Color Presets"); icon: "palette" }
-        Row {
+        SettingRow {
             label: I18n.tr("Color Preset")
             description: I18n.tr("keyviz's 14 upstream palettes. Applying one overwrites the primary, secondary, label and border colours.")
             DankDropdown {

@@ -9,7 +9,7 @@ import qs.Widgets
 //
 // The default content slot is left alone on purpose: pointing it into a nested
 // container would make that container a child of itself.
-Row {
+SettingRow {
     id: root
 
     readonly property var swatches: {
