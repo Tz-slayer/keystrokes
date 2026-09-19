@@ -95,6 +95,31 @@ test('a lone key after a finished chord is not captured by it', () => {
   assert.deepEqual(content(held), [['Ctrl×1', 'C×2']]);
 });
 
+test('a refused press leaves nothing for the overlay to draw', () => {
+  // The gate decides what is SHOWN, so a refused press must not reach the
+  // renderer either. `heldKeys` keeps it -- that is what keeps the rest of the
+  // sequence out -- while `shownKeys` does not, so the overlay draws no keycap
+  // for it and, just as importantly, does not play the press animation on the
+  // keycap it happens to match in an older row.
+  const hotkeys = {eventFilter: 'modifiers'};
+  let state = down(api.initialState(), 'Ctrl', 0, hotkeys);
+  state = down(state, 'C', 1, hotkeys);
+  state = api.release(state, 'C', 2);
+  state = api.release(state, 'Ctrl', 3);
+  assert.deepEqual(plain(state.shownKeys), [], 'the finished chord is not held');
+
+  state = down(state, 'C', 4, hotkeys);
+  assert.deepEqual(plain(state.heldKeys), ['C'], 'physically down, so the gate can judge it');
+  assert.deepEqual(plain(state.shownKeys), [], 'but nothing on screen may react to it');
+
+  // An accepted chord, by contrast, is "held" for drawing while it is down.
+  let held = down(api.initialState(), 'Ctrl', 0, hotkeys);
+  held = down(held, 'C', 1, hotkeys);
+  assert.deepEqual(plain(held.shownKeys), ['Ctrl', 'C']);
+  held = api.release(held, 'C', 2);
+  assert.deepEqual(plain(held.shownKeys), ['Ctrl'], 'a release takes that key off screen');
+});
+
 test('history mode: a late modifier leaves the previous row alone', () => {
   // `Ctrl+A`, let go, then `C` before `Ctrl`: not a shortcut, so the finished
   // `Ctrl+A` row keeps its members. It used to gain one -- the refused C made the

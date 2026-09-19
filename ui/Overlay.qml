@@ -110,7 +110,10 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     mask: Region {}
 
-    function isKeyHeld(label) { return daemon && (daemon.keyboardState.heldKeys.includes(label) || daemon.heldKeys.includes(label)); }
+    // The press pose follows the keys the gate ACCEPTED, not every key that is
+    // physically down: a refused press is held (so it keeps the sequence out) but
+    // is not shown, and it must not animate the keycap it matches in an older row.
+    function isKeyHeld(label) { return daemon && daemon.shownKeys.includes(label); }
     // A re-created overlay window (a real output change, or a reload that
     // leaves the daemon alive) must not replay entrance animations for keycaps
     // that are already on screen. The daemon outlives the window, so it can

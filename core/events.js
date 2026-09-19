@@ -33,12 +33,18 @@
 // members and count them) or a different one sharing a key (drop them). A key
 // the row already holds confirms the repeat, any other key refutes it.
 //
-// A refused press needs no separate bookkeeping. The gate judges the FIRST key
-// of the sequence, so a key it refuses stays the first key for as long as it is
-// held and everything pressed after it is refused too -- there is no moment when
-// a refused press could be folded back in.
+// A refused press needs no separate bookkeeping to be *redeemed*: the gate
+// judges the FIRST key of the sequence, so a key it refuses stays the first key
+// for as long as it is held and everything pressed after it is refused too.
+//
+// It does need to be told apart from a drawn one, though. `heldKeys` is physical
+// (upstream's `pressedKeys`: a refused key stays there, which is what keeps the
+// whole sequence out), while `shownKeys` is what the overlay may draw -- a key
+// whose press the gate refused is down but must leave no trace, or the keycap it
+// matches in an older row plays a press animation for a keystroke the filter
+// just said it would not show.
 function initialState() {
-    return { heldKeys: [], groups: [], nextUid: 1, pendingRepeat: false, pending: null };
+    return { heldKeys: [], groups: [], nextUid: 1, pendingRepeat: false, pending: null, shownKeys: [] };
 }
 
 // keyviz key_event.ts MODIFIERS, expressed over the display labels this plugin
@@ -132,7 +138,9 @@ function press(state, label, now, config) {
             nextUid: state.nextUid,
             // A discarded key is not an answer, so an open question stays open.
             pendingRepeat: state.pendingRepeat,
-            pending: state.pending
+            pending: state.pending,
+            // Held, but deliberately not shown: the overlay must not react to it.
+            shownKeys: state.shownKeys
         };
 
     const existing = !!row && row.keys.some(function(key) { return keyId(key.label) === named; });
@@ -405,7 +413,12 @@ function press(state, label, now, config) {
         groups: config.showEventHistory ? groups.slice(-limit) : groups,
         nextUid: nextUid + (newRow ? 1 : 0),
         pendingRepeat: refutable,
-        pending: pending
+        pending: pending,
+        // The press passed the gate, so this hold is on screen. Every other held
+        // key was added when its own press passed -- a key that was refused keeps
+        // the whole sequence refused while it is down, so nothing can join
+        // `shownKeys` behind its back.
+        shownKeys: state.shownKeys.concat([named])
     };
 }
 
@@ -431,7 +444,8 @@ function dropKey(state, label) {
         // A key vanishing from the overlay is not an answer either. The
         // deferred press has its own release to survive; this is the drag case,
         // where the row is being rewritten around a different gesture.
-        pending: state.pending
+        pending: state.pending,
+        shownKeys: state.shownKeys.filter(function(key) { return key !== label; })
     };
 }
 
@@ -460,7 +474,10 @@ function release(state, label, now) {
         // here is what made `Ctrl` tapped three times then `Ctrl+C` read as a
         // repeat instead of a fresh chord. Only a later press can tell the two
         // apart; if none comes, the row fades and the provisional count stands.
-        pending: state.pending
+        pending: state.pending,
+        // Whatever this hold was -- drawn or refused -- it is over now, so the
+        // overlay has nothing left to show for it either way.
+        shownKeys: state.shownKeys.filter(function(key) { return key !== label; })
     };
 }
 
@@ -489,6 +506,10 @@ function tick(state, now, config) {
         // stands, which is what keeps a run of taps counting.
         pending: state.pending && groups.some(function(group) {
             return group.keys.some(function(key) { return key.label === state.pending.key; });
-        }) ? state.pending : null
+        }) ? state.pending : null,
+        // Only keys that are still down can be on screen; expiry cannot add one.
+        shownKeys: state.shownKeys.filter(function(key) {
+            return state.heldKeys.indexOf(key) !== -1;
+        })
     };
 }

@@ -117,7 +117,7 @@ PluginComponent {
     // and "the fix did nothing" then means two very different things. Bump this
     // by hand whenever the event logic changes; it is the only build metadata
     // QML gives us.
-    readonly property string buildStamp: "events.js rev first-key gate (the modifier must lead)"
+    readonly property string buildStamp: "events.js rev first-key gate + shownKeys (a refused press draws nothing)"
 
     // Configurable settings
     // Every fallback below must equal the matching `defaultValue` in
@@ -190,10 +190,16 @@ PluginComponent {
     property var historyList: []
 
     // ── physically held keys (keyviz `pressedKeys`) ──
-    // Display labels of the keys currently held down, in press order. The
-    // overlay reads this to play the keyviz press animation on the matching
-    // keycap, and it keeps the overlay alive while a displayed key is held.
+    // Display labels of the keys currently held down, in press order. This is the
+    // physical set: a key the filter gate refused stays in it, which is what keeps
+    // the rest of the sequence out. It is the gate's and the mouse path's input,
+    // NOT what the overlay should draw -- see `shownKeys`.
     property var heldKeys: []
+    // The subset of `heldKeys` whose press the gate accepted. The overlay plays
+    // the press animation off this one, so a refused key leaves no trace: no
+    // keycap of its own, and no pressed pose on the keycap it happens to match in
+    // an older row.
+    property var shownKeys: []
 
     // ── mouse drag state (keyviz key_event.ts onMouseMove) ──
     // Label of the button currently down, and the distance travelled since the
@@ -537,6 +543,7 @@ print(json.dumps(devs))
     function applyKeyboard(state) {
         root.keyboardState = state;
         root.heldKeys = state.heldKeys.map(key => root.displayKeyLabel(key));
+        root.shownKeys = state.shownKeys.map(key => root.displayKeyLabel(key));
         root.ctrlActive = root.heldKeys.includes("Ctrl");
         root.altActive = root.heldKeys.includes("Alt");
         root.shiftActive = root.heldKeys.includes("Shift");
