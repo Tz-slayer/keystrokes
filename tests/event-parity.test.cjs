@@ -656,6 +656,47 @@ test('a released helper key does not veto the chord it starts', () => {
   assert.deepEqual(labels(state), [['R', 'Ctrl']]);
 });
 
+// ── a count lives exactly as long as its keycap ───────────────────────────────
+//
+// Two lifetimes used to drift apart. The display ends when the key ages out of
+// `fadeTimeout`; a modifier's count, though, rode on the deferred press, which
+// neither release nor expiry ever cleared -- so Ctrl tapped three times, left
+// to fade, and pressed again ten minutes later read Ctrl×4. A plain key had no
+// such deferral and reset with the row, so the two disagreed.
+//
+// The rule now: gone from the screen means the gesture is over, and the count
+// goes with it. While the keycap is still drawn it stands, which is what lets a
+// run of taps keep counting.
+test('a count lapses with the keycap that carries it', () => {
+  const cfg = {...config, fadeTimeout: 5000};
+  const tap3 = key => {
+    let state = tap(tap(tap(api.initialState(), key, 0, cfg), key, 2, cfg), key, 4, cfg);
+    assert.equal(state.groups[0].keys[0].count, 3);
+    return state;
+  };
+
+  for (const key of ['Ctrl', 'A']) {
+    let state = tap3(key);
+    // Age past the fade: the keycap leaves the screen...
+    state = api.tick(state, 10 + 6000, cfg);
+    assert.equal(state.groups.length, 0, `${key} should have faded`);
+    // ...and the count leaves with it.
+    state = api.press(state, key, 10 + 6100, cfg);
+    assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1],
+      `${key} starts over once its keycap is gone`);
+  }
+});
+
+test('a count keeps going while the keycap is still on screen', () => {
+  // The other half: no expiry happened, so the gesture is still in progress.
+  const cfg = {...config, fadeTimeout: 5000};
+  let state = tap(tap(tap(api.initialState(), 'Ctrl', 0, cfg), 'Ctrl', 2, cfg), 'Ctrl', 4, cfg);
+  state = api.tick(state, 10, cfg);
+  assert.equal(state.groups.length, 1, 'well inside the fade window');
+  state = api.press(state, 'Ctrl', 20, cfg);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [4]);
+});
+
 // ── end to end: the raw input line through to the row ─────────────────────────
 //
 // Every test above feeds the state machine labels directly and runs on

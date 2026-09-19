@@ -464,14 +464,19 @@ function tick(state, now, config) {
         heldKeys: state.heldKeys,
         groups: groups,
         nextUid: state.nextUid,
-        // Expiry is not a new press, so it cannot answer the pending question.
-        // The row it belonged to may have lost the very key that was going to
-        // answer it, in which case the question simply lapses with the row.
-        pendingRepeat: state.pendingRepeat,
-        // Same for the deferred modifier: a press that is still under a finger
-        // can still gain a helper key, whatever else has expired meanwhile. Once
-        // the row it belongs to has faded there is nothing left to answer, but
-        // the row can only fade after the key itself was released.
-        pending: state.pending
+        // Expiry is not a new press, so it cannot answer the pending question,
+        // but it does END it: a gesture the overlay has stopped drawing is
+        // over, and its count goes with it. See `pending` below.
+        pendingRepeat: groups.length > 0 ? state.pendingRepeat : false,
+        // A count lives exactly as long as its keycap. The deferred press is
+        // what carries a modifier's count forward, so left alone it would
+        // outlive the row indefinitely -- Ctrl tapped three times, left to
+        // fade, and pressed again read Ctrl×4 however long the pause was. The
+        // question lapses the moment its key is no longer on screen; while the
+        // key is still shown (still held, or still inside its fade window) it
+        // stands, which is what keeps a run of taps counting.
+        pending: state.pending && groups.some(function(group) {
+            return group.keys.some(function(key) { return key.label === state.pending.key; });
+        }) ? state.pending : null
     };
 }
