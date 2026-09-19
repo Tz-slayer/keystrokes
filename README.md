@@ -48,7 +48,7 @@ Everything is on one page, reached from the plugin's settings icon in the DMS Co
 - **Keycap Content** — label variant, text case, alignment, icons, symbols.
 - **Group Background**, **Visibility Options**, **Input Device**, **General Settings**.
 
-Under **Hotkeys** a sequence shows when its **first key is the modifier** — `Ctrl` then `A` shows, `A` then `Ctrl` does not, and each keycap counts its own presses. Sequences with no modifier at all are still hidden; use **Off** to see every key. **Custom** works the same way against your own comma-separated list instead of the modifier set — physical names like `KEY_RIGHTCTRL` are accepted, and media keys are dropped the way keyviz drops them.
+Under **Hotkeys** a sequence shows when its **first key is the modifier** — `Ctrl` then `A` shows, `A` then `Ctrl` does not, and each keycap counts its own presses. Sequences with no modifier at all are still hidden; use **Off** to see every key. **Custom** works the same way against your own comma-separated list instead of the modifier set — write the names the overlay shows on the keycaps (`Ctrl`, `MUTE`, `Kp1`), not the evdev spellings (`KEY_LEFTCTRL` never matches), and only the first key of a sequence is tested.
 
 Held keys stay visible until released. Released keys expire individually after the **Fade Timeout** (5000 ms by default), and pressing a key again updates its count rather than adding a new cap.
 
