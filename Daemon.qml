@@ -93,7 +93,8 @@ PluginComponent {
             }
             root.traceLog = ["# " + root.buildStamp];
             root.traceLog.push("# enabled=" + root.enabled + " filter=" + root.config.eventFilter
-                + " history=" + root.config.showEventHistory + " tool=" + root.inputTool);
+                + " history=" + root.config.showEventHistory + " tool=" + root.requiredTool
+                + " broken=" + root.inputBroken);
             root.traceLog.push("# recording " + secs + "s -- press the keys now");
             traceTimer.interval = secs * 1000;
             traceTimer.restart();

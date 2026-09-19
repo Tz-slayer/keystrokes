@@ -16,7 +16,11 @@ PluginComponent {
     pluginId: "keystrokes"
     pluginService: PluginService
 
-    readonly property var daemon: PluginService.pluginInstances["keystrokes"]
+    // Same defensive read as Settings.qml: an unregistered or failed daemon must
+    // not take the control-center widget down with it.
+    readonly property var daemon: PluginService.pluginInstances
+        ? PluginService.pluginInstances["keystrokes"]
+        : null
     // Device discovery belongs to the daemon (it owns the device setting and the
     // input process); the widget only labels the "auto" entry, which is UI text
     // and therefore translated here.

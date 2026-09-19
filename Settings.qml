@@ -13,8 +13,15 @@ import "core/keyStyle.js" as KeyStyle
 
         pluginId: "keystrokes"
 
-        // Daemon instance (for the device list and the random-style seed)
-        readonly property var daemon: PluginService.pluginInstances["keystrokes"]
+        // Daemon instance (for the device list and the random-style seed).
+        // Read defensively: this binding is evaluated while the settings page is
+        // being built, and if the daemon has not registered yet -- or failed to
+        // load -- the bare index threw and took the whole page down, which the
+        // shell shows as the settings button doing nothing at all. A missing
+        // daemon degrades the page (no device list) instead of preventing it.
+        readonly property var daemon: PluginService.pluginInstances
+            ? PluginService.pluginInstances["keystrokes"]
+            : null
 
         // The four keyviz skins. Unknown ids (a retired custom style among them)
         // fall back to PBT in the daemon's styleParams.
