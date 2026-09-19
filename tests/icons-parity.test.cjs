@@ -45,3 +45,34 @@ test('reported Fn keys enter the modifier branch', () => {
   assert.equal(context.getDisplayKey('KEY_FN'),'Fn');
   assert.equal(context.display('Fn').category,'modifier');
 });
+
+test('the Menu key draws a keycap icon instead of one bare word', () => {
+  // Deliberate deviation from upstream, which leaves Apps as label + glyph only
+  // (no icon, no category), so it rendered as plain oversized text next to Esc /
+  // Tab / Ins -- the same kind of key, all of them icon + short label.
+  const data = context.display(context.getDisplayKey('KEY_COMPOSE'));
+  assert.equal(data.label, 'menu');
+  assert.equal(data.shortLabel, 'menu');
+  assert.equal(data.icon, 'menu');
+  assert.equal(data.category, 'special');
+  assert.equal(context.display(context.getDisplayKey('KEY_MENU')).icon, 'menu');
+  const paths = context.iconPaths('menu');
+  assert.equal(paths.length, 3, 'lucide menu is the three bars upstream uses as its glyph');
+});
+
+test('every icon a keycap asks for actually resolves to path data', () => {
+  // An icon name with no path renders an empty keycap -- it compiles, lints and
+  // passes every other test. Read the table out of the vm context (a `const` in
+  // QML-style core is not a host property) and resolve each reference.
+  const vm = require('node:vm');
+  const labels = vm.runInContext('Object.keys(DISPLAY)', context);
+  assert.ok(labels.length > 50, 'the table should not silently shrink');
+  for (const label of labels) {
+    for (const kind of [false, true]) {                    // mute keys swap icon by state
+      const icon = context.display(label, kind).icon;
+      if (icon === undefined) continue;
+      assert.ok(context.iconPaths(icon).length > 0,
+        `${label} asks for icon "${icon}", which has no path data`);
+    }
+  }
+});

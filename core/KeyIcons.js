@@ -23,6 +23,9 @@ const ICONS = {
     "grid-2x2": ["M12 3v18", "M3 12h18", "M5.0,3.0h14.0a2.0,2.0 0 0 1 2.0,2.0v14.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-14.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
     "image": ["m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", "M7.0 9.0a2.0 2.0 0 1 0 4.0 0a2.0 2.0 0 1 0 -4.0 0", "M5.0,3.0h14.0a2.0,2.0 0 0 1 2.0,2.0v14.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-14.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
     "lock": ["M7 11V7a5 5 0 0 1 10 0v4", "M5.0,11.0h14.0a2.0,2.0 0 0 1 2.0,2.0v7.0a2.0,2.0 0 0 1 -2.0,2.0h-14.0a2.0,2.0 0 0 1 -2.0,-2.0v-7.0a2.0,2.0 0 0 1 2.0,-2.0Z"],
+    // lucide-static@0.562.0 `menu`. Upstream has no icon for the Apps key (see
+    // the DISPLAY entry below), so this path is added here rather than ported.
+    "menu": ["M4 5h16", "M4 12h16", "M4 19h16"],
     "moon": ["M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"],
     "mouse": ["M12 6v4", "M12.0,2.0h0.0a7.0,7.0 0 0 1 7.0,7.0v6.0a7.0,7.0 0 0 1 -7.0,7.0h-0.0a7.0,7.0 0 0 1 -7.0,-7.0v-6.0a7.0,7.0 0 0 1 7.0,-7.0Z"],
     "mouse-left-click": ["M5 11L5 15C5 18.866 8.13401 22 12 22C15.866 22 19 18.866 19 15V9C19 5.13401 15.866 2 12 2C10.9264 2 9.90926 2.24169 9 2.67363", "M12 6V10", "M3 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"],
@@ -51,7 +54,11 @@ const DISPLAY = {
     "Fn": { label: "fn", category: "modifier" },
     "PrintScreen": {"label": "print screen", "shortLabel": "prt scrn", "icon": "image"},
     "Pause": {"label": "pause break", "shortLabel": "pause", "icon": "pause"},
-    "Apps": {"label": "menu", "glyph": "☰"},
+    // Deviation from upstream: keyviz gives Apps `label` + `glyph` only -- no
+    // icon, no shortLabel, no category -- so the keycap was one big bare word
+    // beside Esc / Tab / Ins, which are the same kind of key and all carry an
+    // icon. The `menu` bars are the same shape upstream picked for its glyph.
+    "Apps": {"label": "menu", "shortLabel": "menu", "icon": "menu", "category": "special"},
     "ScrollLock": {"label": "scroll lock", "glyph": "🖱", "icon": "mouse"},
     "NumLock": {"label": "num lock", "icon": "lock"},
     "KpReturn": {"label": "Enter", "glyph": "↩", "category": "numpad"},
