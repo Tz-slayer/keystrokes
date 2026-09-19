@@ -151,8 +151,15 @@ Item {
     // label that outgrows the sample visible instead of overflowing the cap
     // (a test asserts all twelve agree, which fails if that ever happens).
     readonly property bool isFunctionKey: /^F(?:[1-9]|1[0-2])$/.test(keycap.label)
+    // A function key has no icon to carry its cap, so its label was drawn at the
+    // full font size and the cap grew to 103px -- the widest thing on screen.
+    // Drawing it slightly smaller keeps the row legible and closer in weight to
+    // the icon+label keys beside it, and the cap follows the text down with it.
+    readonly property real functionTextScale: 0.9
+    readonly property real labelSize: keycap.isFunctionKey
+        ? keycap.fs * keycap.functionTextScale : keycap.fs
     readonly property real functionW: Math.max(measureFunction.implicitWidth,
-                                               measurePlain.implicitWidth)
+                                               measureFunctionLabel.implicitWidth)
     readonly property real contentW: {
         if (keycap.iconOnly) return keycap.fs * 0.8;
         if (keycap.iconLayout) return Math.max(keycap.fs * 0.5, measureSmall.implicitWidth);
@@ -190,10 +197,12 @@ Item {
     }
     Measurer { id: measureSmall; font.pixelSize: keycap.fs * 0.5 }
     Measurer { id: measurePlain }
-    // The function row's shared sample: the widest label of F1..F12 at this
-    // font, measured (F10 beats F12 by 0.7px at 32px). Never drawn -- it only
-    // tells every F cap how wide the row has to be.
-    Measurer { id: measureFunction; text: "F10" }
+    // The function row's shared sample: the widest label of F1..F12 at the size
+    // it is actually drawn, measured (F10 beats F12 by 0.7px at 32px), plus the
+    // label this cap carries. Both at `labelSize`, or the caps would be sized
+    // for text the label no longer uses. Never drawn.
+    Measurer { id: measureFunction; text: "F10"; font.pixelSize: keycap.labelSize }
+    Measurer { id: measureFunctionLabel; font.pixelSize: keycap.labelSize }
     Measurer { id: measureSymbol; font.pixelSize: keycap.fs * 0.56; text: keycap.kd.symbol || "" }
     Measurer { id: measureSub; font.pixelSize: keycap.fs * 0.56; font.weight: Font.DemiBold }
     Measurer { id: measureHalf; font.pixelSize: keycap.fs * 0.5 }
@@ -452,7 +461,7 @@ Item {
                 horizontalAlignment: keycap.textH === "left" ? Text.AlignLeft
                     : (keycap.textH === "right" ? Text.AlignRight : Text.AlignHCenter)
                 wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs
+                font.pixelSize: keycap.labelSize
                 font.capitalization: keycap.capsMode
                 color: keycap.labelColor
                 text: keycap.displayLabel
@@ -499,7 +508,7 @@ Item {
                 visible: !minimalRow.minimalIconOnly
                 anchors.verticalCenter: parent.verticalCenter
                 wrapMode: Text.NoWrap
-                font.pixelSize: keycap.fs
+                font.pixelSize: keycap.labelSize
                 font.capitalization: keycap.capsMode
                 color: keycap.labelColor
                 // minimal.tsx: `variant === "text" ? label : shortLabel ?? label`

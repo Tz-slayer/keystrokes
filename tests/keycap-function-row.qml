@@ -51,7 +51,7 @@ TestCase {
 
     function collect(out, item) {
         if (item.pressCount !== undefined && item.objectName !== "keyviz-press-count")
-            out.push({label: item.label, width: item.width});
+            out.push({label: item.label, width: item.width, labelSize: item.labelSize});
         for (const child of item.children) collect(out, child);
     }
 
@@ -79,6 +79,11 @@ TestCase {
         // The row is as wide as its widest member, never narrower: the widest
         // label ("F10") has to fit, or it would overflow the cap instead.
         verify(shared > 90, "the row is sized by the widest label, not the narrowest");
+
+        // Its label is drawn smaller than a bare label: a function key has no
+        // icon, so at full size its cap became the widest thing on screen.
+        for (const cap of caps)
+            verify(cap.labelSize < settings.capFontSize, cap.label + " is drawn at the full font size");
     }
 
     function test_theRuleIsScopedToTheFunctionRow() {
