@@ -499,11 +499,16 @@ test('releasing a key that was never held leaves the groups untouched', () => {
 // ── the deferred modifier ─────────────────────────────────────────────────────
 //
 // A modifier pressed with nothing else down is reported by the kernel as one
-// event, but it is the start of either a repeat (`Ctrl` tapped again -> count
-// two) or a chord (`Ctrl+C` -> one each), and those want opposite counts. The
-// press is therefore provisional: shown, held open, and decided by whatever
-// comes next. These tests pin that mechanism, which nothing else can supply --
-// remove it and `Ctrl` tapped three times then `Ctrl+C` reads as four.
+// event, but it is the start of either a repeat (`Ctrl` tapped again) or a
+// chord (`Ctrl+C`), and those disagree about the row's MEMBERS, not about the
+// count: a count is how many times that key went down, and it never goes
+// backwards. Ctrl tapped four times and then pressed once more as `Ctrl+C` is
+// five presses, so the row reads `Ctrl×5 + C×1`.
+//
+// The press is therefore provisional -- shown, held open, and decided by
+// whatever comes next. These tests pin that mechanism, which nothing else can
+// supply: remove it and the retype below collapses to a single key, or the
+// modifier's count silently resets when a chord forms.
 test('a lone modifier tapped repeatedly counts up on one row', () => {
   let state = tap(api.initialState(), 'Ctrl', 0);
   state = tap(state, 'Ctrl', 2);
@@ -513,15 +518,18 @@ test('a lone modifier tapped repeatedly counts up on one row', () => {
   assert.equal(state.groups.length, 1);
 });
 
-test('a chord opened over a repeated modifier counts one each', () => {
-  // The reported bug: tap Ctrl three times, then press Ctrl+C. Every key of the
-  // shortcut was pressed once, so the row is Ctrl×1+C×1 -- not Ctrl×4.
-  let state = tap(tap(tap(api.initialState(), 'Ctrl', 0), 'Ctrl', 2), 'Ctrl', 4);
-  state = api.press(state, 'Ctrl', 6, config);
-  state = api.press(state, 'C', 7, config);
+test('a chord keeps the count the modifier earned on its own', () => {
+  // The requested behaviour: tap Ctrl four times, then press Ctrl+C. Ctrl went
+  // down five times in all, so the row is Ctrl×5+C×1. It must NOT read
+  // Ctrl×1+C×1 -- dropping the modifier back to one because a chord formed is
+  // indistinguishable, from the overlay, from the count resetting itself.
+  let state = tap(tap(tap(tap(api.initialState(), 'Ctrl', 0), 'Ctrl', 2), 'Ctrl', 4), 'Ctrl', 6);
+  assert.equal(state.groups[0].keys[0].count, 4, 'four taps, four presses so far');
+  state = api.press(state, 'Ctrl', 8, config);
+  state = api.press(state, 'C', 9, config);
   assert.deepEqual(labels(state), [['Ctrl', 'C']]);
-  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
-    'the taps were a separate gesture and must not count into the chord');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [5, 1],
+    'the fifth Ctrl press happened and C was pressed once');
   assert.equal(state.groups[0].uid, 0, 'replacement mode shows one row either way');
 });
 
@@ -539,18 +547,18 @@ test('a chord retyped counts every key of it', () => {
     'Ctrl+C twice means both keys were pressed twice');
 });
 
-test('a different shortcut sharing the modifier starts its own count', () => {
+test('a different shortcut keeps the modifier count but drops its partner', () => {
   let state = api.press(api.initialState(), 'Ctrl', 0, config);
   state = api.press(state, 'C', 1, config);
   state = api.release(state, 'C', 2);
   state = api.release(state, 'Ctrl', 3);
 
-  // Ctrl+V, not a second Ctrl+C: the count carries over for the shared
-  // modifier but the keystroke is a different one, so C does not return.
+  // Ctrl+V, not a second Ctrl+C: the keystroke is a different one so C does
+  // not return, but Ctrl really was pressed a second time, so its count is 2.
   state = api.press(state, 'Ctrl', 4, config);
   state = api.press(state, 'V', 5, config);
   assert.deepEqual(labels(state), [['Ctrl', 'V']]);
-  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1]);
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [2, 1]);
 });
 
 test('a released member lingers while a live chord is still in progress', () => {
@@ -584,7 +592,8 @@ test('the deferred press is shown while it is undecided', () => {
 test('releasing a deferred key does not settle it', () => {
   // Tapping Ctrl releases it, and so does typing Ctrl+C. The release carries no
   // information, so the question has to outlive it -- otherwise the third tap
-  // of Ctrl,Ctrl,Ctrl,C would be counted as a repeat instead of a chord.
+  // of Ctrl,Ctrl,Ctrl,C would be treated as a tap rather than the opening of
+  // the chord, and the row would lose the members C belongs with.
   let state = api.press(api.initialState(), 'Ctrl', 0, config);
   state = api.release(state, 'Ctrl', 1);
   state = api.press(state, 'Ctrl', 2, config);
@@ -593,8 +602,8 @@ test('releasing a deferred key does not settle it', () => {
   assert.equal(state.groups[0].keys[0].count, 3, 'three taps, three presses');
 
   state = api.press(state, 'C', 5, config);
-  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1, 1],
-    'and the chord that follows still counts one each');
+  assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [3, 1],
+    'the third Ctrl press still counts, and C was pressed once');
 });
 
 test('a modifier filter still admits a deferred modifier', () => {
@@ -682,17 +691,18 @@ test('a modifier filter still admits a deferred modifier', () => {
   const CTRL_UP = inputLine('KEY_LEFTCTRL', 'released');
   const C_DOWN = inputLine('KEY_C', 'pressed');
 
-  test('the repeated-modifier bug is gone through the daemon\'s real input path', () => {
-    // The exact reported gesture: tap Ctrl a few times, then press Ctrl+C. The
-    // overlay must read Ctrl×1+C×1 -- one press each -- not Ctrl×4+C×1.
+  test('the modifier keeps its count through the daemon\'s real input path', () => {
+    // The exact requested gesture: tap Ctrl three times, then press Ctrl+C.
+    // Ctrl went down four times in all, so the overlay must read Ctrl×4+C×1 --
+    // not Ctrl×1+C×1, which is what a chord that resets the modifier gives.
     const state = type([
       CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP, CTRL_DOWN, CTRL_UP,
       CTRL_DOWN, C_DOWN,
     ]);
     const keys = plain(state.groups[state.groups.length - 1].keys);
     assert.deepEqual(keys.map(key => key.label), ['Ctrl', 'C']);
-    assert.deepEqual(keys.map(key => key.count), [1, 1],
-      'the three taps were their own gesture and must not count into the chord');
+    assert.deepEqual(keys.map(key => key.count), [4, 1],
+      'four Ctrl presses happened and C was pressed once');
     assert.deepEqual(plain(state.heldKeys), ['Ctrl', 'C']);
   });
 

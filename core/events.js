@@ -4,16 +4,23 @@
 //
 // `heldKeys` is what is physically down, `group.keys[].count` is what the user
 // sees. They normally move together, with ONE deliberate exception: a modifier
-// pressed with nothing else down (`pending`). Such a press is the start of
-// either a repeat (`Ctrl`, `Ctrl` -> two) or a chord (`Ctrl`, `C` -> one each),
-// and those want opposite answers -- so the press is provisional. It is shown
-// (a lone keycap has to say *something*), and the next event decides what it
-// was:
+// pressed with nothing else down (`pending`).
+//
+// A count is how many times that key was pressed, and it NEVER goes backwards:
+// Ctrl tapped four times and then pressed once more as `Ctrl+C` is five presses
+// of Ctrl, so the row reads `Ctrl×5 + C×1`. Dropping the modifier back to one
+// because a chord formed reads as the count resetting, which is the thing this
+// overlay exists to show. Both readings of a lone modifier -- "the fourth tap"
+// and "the first key of `Ctrl+C`" -- therefore want the SAME number.
+//
+// What they disagree about is the row's other members, so that is what the
+// deferral decides. The press is shown (a lone keycap has to say *something*)
+// and the next event settles it:
 //
 //   * another key arrives and it was one of the previous row's members
-//     -> the shortcut was retyped: undo the provisional row, count it,
-//   * another key arrives otherwise -> take it back down to one: this is the
-//     first key of a chord, not a repeat,
+//     -> the shortcut was retyped: undo the provisional row, count every key,
+//   * another key arrives otherwise -> a different chord: the modifier keeps
+//     its count, the members that are no longer held are dropped,
 //   * nothing arrives -> the row just fades, and the provisional count stands.
 //
 // Crucially the *release* does not settle it. A modifier released with nothing
@@ -200,9 +207,12 @@ function press(state, label, now, config) {
             history = resolves.oldGroups;
             nextUid = resolves.oldNextUid;
         } else {
-            // A chord, not a repeat: the deferred press was this keystroke's
-            // modifier all along, so its provisional count comes back down to
-            // one -- the repeat the overlay guessed at never happened.
+            // A different chord, not a retype: the deferred press was this
+            // keystroke's modifier all along. Its count stays at `settled + 1`
+            // -- what the provisional row already showed -- because that really
+            // is how many times the key went down. It once dropped to one here,
+            // on the theory that a chord starts a fresh count; from the outside
+            // that is indistinguishable from the count resetting itself.
             //
             // The row it interrupted is not thrown away, though. Ctrl pressed
             // while C has just been released is still `Ctrl+C+V` in the making,
@@ -226,9 +236,14 @@ function press(state, label, now, config) {
             // being rebuilt along with the row and enters afresh; history mode
             // keeps the row it was on and only moves the keycap forward, so its
             // entrance animation must not fire a second time.
-            const modifier = config.showEventHistory
-                ? { label: resolves.key, count: 1, lastPressedAt: now, animateIn: false }
-                : newKey(resolves.key, now);
+            const modifier = {
+                label: resolves.key,
+                count: resolves.settled + 1,
+                lastPressedAt: now,
+                // Replacement mode rebuilds the whole row, so the keycap enters
+                // afresh; history mode keeps it on screen and must not replay.
+                animateIn: !config.showEventHistory
+            };
             keys = [modifier].concat(kept).concat([newKey(named, now)]);
             history = resolves.oldGroups;
             nextUid = resolves.oldNextUid;
