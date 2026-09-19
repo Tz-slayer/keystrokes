@@ -359,6 +359,14 @@ print(json.dumps(devs))
             newInstances[pluginId] = root;
             pluginService.pluginInstances = newInstances;
         }
+        // Persist the filter that is actually in force, once, so the settings
+        // page shows the mode being used. An install that only ever flipped the
+        // widget's "Normal Keys" toggle stored `showNormalKeys` and no
+        // `eventFilter`, so it filtered as "none" while the Event Filter row
+        // displayed its default, "Hotkeys" -- two controls for one behaviour,
+        // visibly disagreeing.
+        if (root.pluginData.eventFilter === undefined)
+            root.saveSetting("eventFilter", root.eventFilter);
         checkTools();
         scanDevices();
     }

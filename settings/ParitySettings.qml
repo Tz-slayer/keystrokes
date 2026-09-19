@@ -46,7 +46,7 @@ Column {
         ValueSetting {
             settingKey: "allowedKeys"; kind: "keys"
             label: I18n.tr("Allowed Keys")
-            description: I18n.tr("Comma-separated names, for example Ctrl,Super,Alt,A,Enter. Use Comma for the comma key. A sequence is shown when any of its keys is in the list, whatever order they were pressed in.")
+            description: I18n.tr("Comma-separated names, for example Ctrl,Super,Alt,A,Enter. Use Comma for the comma key. A sequence is shown when its first key is in the list.")
             defaultValue: "Ctrl,Super,Alt"
             enabled: filterSetting.value === "custom"
         }

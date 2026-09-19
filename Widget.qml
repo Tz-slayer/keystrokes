@@ -157,10 +157,15 @@ PluginComponent {
                         text: I18n.tr("Normal Keys")
                         onToggled: {
                             if (root.daemon)
-                                root.daemon.saveSetting("showNormalKeys", checked);
+                                root.daemon.saveSetting("eventFilter", checked ? "none" : "modifiers");
                         }
                         Binding on checked {
-                            value: root.daemon ? root.daemon.showNormalKeys : false
+                            // The same setting the settings page's Event Filter row
+                            // edits: one behaviour, one key. Writing `showNormalKeys`
+                            // here used to leave the two controls disagreeing -- the
+                            // filter was off while the settings page still showed its
+                            // default, "Hotkeys".
+                            value: root.daemon ? root.daemon.eventFilter === "none" : false
                         }
                     }
 

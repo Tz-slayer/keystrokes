@@ -66,6 +66,35 @@ test('a plain key released before the modifier was never part of a chord', () =>
   assert.deepEqual(plain(state.groups[0].keys.map(key => key.count)), [1]);
 });
 
+test('a lone key after a finished chord is not captured by it', () => {
+  // `Ctrl+C`, both released, then C on its own. The finished row is still on
+  // screen (it lingers until `fadeTimeout`), but the new press is judged on its
+  // own: its leading key is not a modifier, so the row gains nothing. Only
+  // `lastPressedAt` moves, which is what upstream's `onKeyRelease` does with any
+  // released key -- the members and the counts are what must not change.
+  const hotkeys = {eventFilter: 'modifiers'};
+  const content = state => plain(state.groups.map(group => group.keys.map(key => key.label + '×' + key.count)));
+  let state = down(api.initialState(), 'Ctrl', 0, hotkeys);
+  state = down(state, 'C', 1, hotkeys);
+  state = api.release(state, 'C', 2);
+  state = api.release(state, 'Ctrl', 3);
+  const finished = content(state);
+  assert.deepEqual(finished, [['Ctrl×1', 'C×1']]);
+
+  state = down(state, 'C', 4, hotkeys);
+  assert.deepEqual(plain(state.heldKeys), ['C'], 'it is held, so the gate has something to judge');
+  state = api.release(state, 'C', 5);
+  state = down(state, 'C', 6, hotkeys);
+  assert.deepEqual(content(state), finished, 'the finished row gains no member and no count');
+
+  // With the modifier held the same press IS part of the chord: Ctrl+C, C.
+  let held = down(api.initialState(), 'Ctrl', 0, hotkeys);
+  held = down(held, 'C', 1, hotkeys);
+  held = api.release(held, 'C', 2);
+  held = down(held, 'C', 3, hotkeys);
+  assert.deepEqual(content(held), [['Ctrl×1', 'C×2']]);
+});
+
 test('history mode: a late modifier leaves the previous row alone', () => {
   // `Ctrl+A`, let go, then `C` before `Ctrl`: not a shortcut, so the finished
   // `Ctrl+A` row keeps its members. It used to gain one -- the refused C made the
