@@ -7,36 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Restructured project documentation architecture according to personal open-source standards into `docs/ARCHITECTURE.md`, `docs/FLOWS.md`, and `docs/DEVELOPMENT.md`.
-- Added `AGENTS.md` to guide AI Coding Agents on architectural rules, testing requirements, and invariants.
-- Updated `README.md` to provide clearer project navigation and links to core technical docs.
+## [1.0.0] - 2026-09-20
 
-## [1.3.1] - 2026-09-20
-
-### Added
-- Feat: Added keycap icon support for the `Menu` key matching other functional keys.
-- Feat: Added typed parameter annotations to Quickshell IPC handlers (`trace`, `setStyle`, `importStyle`).
-
-### Changed
-- Keycaps: Function keys (F1-F12) share uniform width and adjusted font scaling (0.9em).
-- Settings: Unified filter controls and defensive degradation when daemon is registering.
-- Events: A group row lists only currently held keys; released members are excluded from ongoing chords.
-
-### Fixed
-- Fixed QML component shadowing where `Row.qml` conflicted with QtQuick built-in `Row` type (renamed to `SettingRow.qml`).
-- Fixed modifier count reset when chords form; monotonic count accumulation preserved across combos.
-- Fixed single-key event history overwrite issue in history mode.
-- Fixed press-count badge clipping on group backgrounds by introducing geometric expansion calculations without QML clipping.
-
-## [1.3.0] - 2026-09-18
+The baseline for this plugin's version line. The numbering restarts here: everything
+below describes the feature set as it stands at this commit, not a delta from an
+earlier release.
 
 ### Added
-- Added multi-monitor follow-focus positioning (`@focused` output tracking via CompositorService).
-- Added comprehensive unit test suite with headless Node.js VM testing and offscreen QtQuick regression tests.
-- Added 14 upstream color presets and style export/import capabilities.
-- Added IPC trace diagnostic mode (`dms ipc keystrokes trace`) for stream telemetry.
+
+**Rendering**
+- Four keycap skins ported 1:1 from keyviz with exact vector geometries — Minimal,
+  Laptop, Low Profile (default) and PBT. Switching skins preserves custom colors.
+- Five entrance and exit animations — `none`, `fade`, `zoom`, `float`, `slide` — each
+  with its own duration and easing curve.
+- Real-time press-count badges, so a held or hammered key reads `Ctrl×5 + C×1`.
+- 14 upstream color presets, gradient fills, fractional border widths and corner radii.
+
+**Input and grouping**
+- Combination detection: `Ctrl + Shift + S` collapses into one row, while consecutive
+  single keys flow as separate rows. A row lists only the keys currently held.
+- Three filter modes: all keys, hotkeys only (requiring a leading modifier), or a
+  custom whitelist.
+- History mode with a configurable maximum row count.
+- Mouse clicks, drags and wheel events render as keycaps; mute state stays in sync.
+
+**Placement**
+- Nine screen anchors on any output, with automatic follow-focus across monitors.
+
+**Operations**
+- Typed IPC surface: `toggle`, `test`, `setStyle`, `importStyle`, and `trace <seconds>`
+  for recording the parsed event stream.
+- Style export and import as JSON.
 
 ### Changed
-- Refactored state machine to be pure functional and immutable (`core/events.js`).
-- Decoupled `core/` and `ui/` layers from DankMaterialShell specific dependencies.
+- The event state machine lives in pure, immutable functions in `core/events.js`.
+- `core/` and `ui/` are decoupled from DankMaterialShell; host configuration and
+  compositor state are injected explicitly by the daemon.
+- Documentation restructured into `docs/ARCHITECTURE.md`, `docs/FLOWS.md` and
+  `docs/DEVELOPMENT.md`, with `AGENTS.md` stating the layering rules and the test and
+  documentation gates.
+- Two automated gates guard the repository: the unit suite via
+  `node --test tests/*.test.cjs`, and the documentation link and anchor guard via
+  `node tests/docs-links.cjs`.
