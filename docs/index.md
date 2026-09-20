@@ -24,6 +24,7 @@ ui/Overlay.qml           行 → 键帽，配动画画出
 
 | 环节 | 分册 |
 | --- | --- |
+| 模块放哪、谁依赖谁、改哪一层 | [架构](architecture.md) |
 | 输入怎么进来、怎么变成标签 | [输入管道](input-pipeline.md) |
 | 按键怎么成组、计数怎么算 | [事件与计数](event-model.md) |
 | 键帽在屏幕上活多久、计数何时归零 | [生命周期](lifecycle.md) |
@@ -48,6 +49,8 @@ dms/widgets/*.qml        DMS 控件的 vendored 副本，尽量不动
 
 反过来，只有三个入口文件允许碰 DMS。compositor 查询（当前焦点在哪个输出）也属于入口层：
 overlay 只接受注入进来的 `focusedOutputName`。
+
+依赖方向、配置流、IPC 面、改动该落在哪一层：[架构](architecture.md)。
 
 ## 五条全局不变量
 
