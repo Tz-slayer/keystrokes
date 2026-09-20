@@ -1,64 +1,92 @@
 # Keystrokes
 
-**A keystroke and mouse-action overlay for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)** — draws your keypresses on screen while you record a screencast.
+**A keystroke and mouse-action overlay for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)** — draws your keypresses and mouse actions in real time while you record a screencast or stream a presentation.
 
-## Install
+<p align="center">
+  <img src="docs/cover.png" width="480" alt="Keystrokes Cover Banner">
+</p>
+
+## Overview
+
+Keystrokes brings high-fidelity keystroke visualization to the DankMaterialShell / Quickshell environment. Ported 1:1 from [mulaRahul/keyviz](https://github.com/mulaRahul/keyviz), it features pixel-perfect keycap geometries, smooth entrance/exit animations, hotkey combination detection, and real-time press repeat counters.
+
+## Features
+
+- **Combinations and Chords**: `Ctrl + Shift + S` groups into a single row; consecutive single keys flow naturally.
+- **Four Keycap Skins**: Minimal, Laptop, Low Profile (default), and PBT ported with exact Keyviz vector geometries.
+- **Real Press Feedback**: Real-time press badges counting repeats as you hold or hammer a key (`Ctrl×5 + C×1`).
+- **Five Animation Types**: `none`, `fade`, `zoom`, `float`, and `slide` with independent durations and easing curves.
+- **Flexible Positioning**: 9 screen anchor positions on any output with automatic multi-monitor follow-focus support.
+- **Intelligent Filtering**: Show all keys, hotkeys only (requiring leading modifier), or your own custom whitelist.
+- **Mouse & Audio Feedback**: Mouse clicks, drags, and wheel events rendered as keycaps, plus mute status sync.
+- **Rich Palettes & Presets**: 14 upstream color presets, style randomization, and export/import via JSON.
+
+## Keycap Styles
+
+<p align="center">
+  <img src="docs/keycap-preview.png" width="620" alt="The four skins rendered by this plugin: minimal, laptop, lowprofile, pbt">
+</p>
+
+All four styles are direct ports of keyviz's keycap components. Switching between styles preserves your custom color configuration consistently.
+
+## Requirements
+
+- **Linux** (Wayland recommended: Hyprland, Niri, Sway; or X11)
+- **[Quickshell](https://github.com/outfoxxed/quickshell)** (0.0.9+) & **[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell)** (1.5.0+)
+- **`libinput`** CLI installed (`evtest` available as fallback)
+- User must belong to the **`input`** group (`/dev/input/event*` access)
+
+## Installation
+
+Clone this repository into your DMS plugins directory:
 
 ```bash
 git clone https://github.com/Tz-slayer/keystrokes.git \
   ~/.config/DankMaterialShell/plugins/keystrokes
 ```
 
-Then enable it in DMS. Because it reads input devices directly, your user must be in the `input` group and the libinput CLI has to be installed:
+Ensure your user is part of the `input` group and `libinput` is installed:
 
 ```bash
-sudo usermod -aG input $USER     # then log out and back in
-sudo pacman -S libinput          # Arch
+sudo usermod -aG input $USER     # Log out and log back in to take effect
+sudo pacman -S libinput          # Arch Linux (or apt install libinput-tools on Ubuntu/Debian)
 ```
 
-`evtest` is optional — a fallback for single-device mode when the libinput CLI is unavailable.
+Then enable **Keystrokes** in the DMS Control Center plugin settings.
 
-## What it does
+## Quick Start
 
-- **Combinations and single keys.** `Ctrl + Shift + S` is one row; typed letters appear individually.
-- **Four keycap skins** ported 1:1 from keyviz — minimal, laptop, low profile and PBT. See [Keycap styles](#keycap-styles).
-- **Real press feedback**, with a badge counting repeats while you hold or hammer a key.
-- **Five animations** (none / fade / zoom / float / slide), any position on any display, independent X/Y margins.
-- **Full colour control** — separate normal and modifier colours, gradients, fractional border widths and radii.
-- **Filtering** — every key, hotkeys only, or your own list of allowed keys.
-- Mouse clicks, drags and wheel as keycaps (off by default), and a mute keycap that knows the real sink state.
+- **Toggle Overlay**: Press `Shift + F10` (default toggle shortcut), or toggle via the DMS Control Center widget.
+- **Via IPC**:
+  ```bash
+  dms ipc keystrokes toggle       # Toggle overlay on/off
+  dms ipc keystrokes test         # Play demo animation sequence
+  dms ipc keystrokes setStyle pbt # Switch keycap skin
+  ```
 
-## Keycap styles
+## Configuration
 
-<img src="docs/keycap-preview.png" width="620" alt="The four skins rendered by this plugin's QML: minimal, laptop, lowprofile, pbt">
+All configuration is accessible from the plugin settings page in the DMS Control Center:
 
-All four are straight ports of keyviz's keycap components, so the geometry is keyviz's rather than an approximation. Pick one in settings — **Low Profile** is the default. Choosing **Minimal** also switches to icon labels and turns off modifier highlighting, matching what keyviz does there.
+- **Filtering & History**: Show all keys, hotkeys only, or custom whitelist; configure history mode and row count.
+- **Display & Margins**: Choose output display (Follow focused output or pinned monitor), and customize X/Y margins.
+- **Colors & Borders**: Modifier colors, normal colors, gradients, fractional border widths, and corner radii.
+- **Keycap Content**: Keycap labels, capitalization, icons, and special symbols.
 
-The skin supplies the *geometry*, your colour settings supply every *colour*, so one set of colours renders all four consistently.
+## Documentation
 
-## Settings
+Comprehensive project documentation is maintained under [`docs/`](docs/):
 
-Everything is on one page, reached from the plugin's settings icon in the DMS Control Center.
-
-- **Filtering & History** — show every key, only hotkeys, or your own comma-separated list of allowed keys; history size and direction; the toggle shortcut.
-- **Display & Margins** — which output to draw on, and the margins. Following the focused output is the default.
-- **Colors & Border** — colours, gradients, border width and corner radius.
-- **Color Presets** — 14 upstream palettes, plus style randomization.
-- **Layout & Animations** — position, skin, animation and duration.
-- **Keycap Content** — label variant, text case, alignment, icons, symbols.
-- **Group Background**, **Visibility Options**, **Input Device**, **General Settings**.
-
-Under **Hotkeys** a sequence shows when its **first key is the modifier** — `Ctrl` then `A` shows, `A` then `Ctrl` does not, and each keycap counts its own presses. Sequences with no modifier at all are still hidden; use **Off** to see every key. **Custom** works the same way against your own comma-separated list instead of the modifier set — write the names the overlay shows on the keycaps (`Ctrl`, `MUTE`, `Kp1`), not the evdev spellings (`KEY_LEFTCTRL` never matches), and only the first key of a sequence is tested.
-
-Held keys stay visible until released. Released keys expire individually after the **Fade Timeout** (5000 ms by default), and pressing a key again updates its count rather than adding a new cap.
-
-A combo is counted per key, not per shortcut: type `Ctrl`+`C` three times and both keycaps read 3. A released key is also kept on the row while the rest of the shortcut is still held, so `Ctrl`+`C`+`V` reads as all three until you let go — the row then drops `C` as soon as a fresh `Ctrl`+`V` makes clear the old `C` was not coming back.
-
+- **[Architecture](docs/ARCHITECTURE.md)**: System design, static component topology, layering rules, and data structures.
+- **[Runtime & Business Flows](docs/FLOWS.md)**: Input pipeline, state machines, hotkey arbitration, lifecycle, and invariants.
+- **[Development Guide](docs/DEVELOPMENT.md)**: Setup, build/run, tracing, automated testing matrix, and troubleshooting.
+- **[Agent Instructions](AGENTS.md)**: Coding rules, architecture boundaries, and checklists for AI Coding Agents.
+- **[Changelog](CHANGELOG.md)**: Historical version changes and release logs.
 
 ## Credits
 
-- **[mulaRahul/keyviz](https://github.com/mulaRahul/keyviz)** (MIT)
-- **[loccun/dms-screenkey](https://github.com/loccun/dms-screenkey)** (MIT)
+- **[mulaRahul/keyviz](https://github.com/mulaRahul/keyviz)** (MIT) — Original visual designs and core event logic.
+- **[loccun/dms-screenkey](https://github.com/loccun/dms-screenkey)** (MIT) — Input stream reading concepts for DMS.
 
 ## License
 

@@ -1,0 +1,64 @@
+flowchart TD
+    subgraph KernelSpace ["Linux Kernel Space"]
+        KernelDev["/dev/input/event* (Hardware Input Stream)"]
+    end
+
+    subgraph SubprocessLayer ["Subprocess Stream Provider"]
+        LibinputProc["libinput debug-events --show-keycodes<br/>(Fallback: evtest)"]
+    end
+
+    subgraph HostLayer ["Host Shell Layer (DankMaterialShell / Quickshell)"]
+        direction TB
+        Widget["Widget.qml<br/>(Control Center Toggle & Status)"]
+        Settings["Settings.qml & settings/*<br/>(Preferences UI)"]
+        IPC["IpcHandler<br/>(dms ipc keystrokes ...)"]
+        Daemon["Daemon.qml (Singleton Controller)<br/>• Process Ingestion & SplitParser<br/>• Configuration Bus & Persistence<br/>• Compositor Focus Tracking<br/>• 50ms Tick Timer & IPC Service"]
+
+        Widget -->|Read/Write Config| Daemon
+        Settings -->|Read/Write Config| Daemon
+        IPC -->|Commands| Daemon
+    end
+
+    subgraph CoreLayer ["Core Domain Logic (Pure JS, Zero External Dependencies)"]
+        direction TB
+        InputParse["core/inputParse.js<br/>(Stdout Line Tokenizer)"]
+        KeyMapper["core/keyMapper.js<br/>(evdev Scancode -> Display Label)"]
+        Events["core/events.js<br/>(Immutable Event State Machine)"]
+        KeyIcons["core/KeyIcons.js<br/>(SVG Vector Paths & Symbols)"]
+        KeyStyle["core/keyStyle.js & keycapColors.js<br/>(Config Validation & Color Palettes)"]
+        GroupFrame["core/groupFrame.js<br/>(Badge Outset & Frame Geometry)"]
+        OverlayLayout["core/overlayLayout.js<br/>(Follow-Focus Screen Anchoring)"]
+        Motion["core/motion.js<br/>(Easing Curves & Animation Durations)"]
+        ListModelSync["core/listModelSync.js<br/>(Differential Reconciler by UID)"]
+    end
+
+    subgraph UILayer ["UI Presentation Layer (QtQuick / Quickshell, Zero DMS Dependency)"]
+        direction TB
+        Overlay["ui/Overlay.qml<br/>(PanelWindow Multi-screen Container)"]
+        Group["ui/Group.qml<br/>(Clip-Free Background Panel & Key Row)"]
+        Keycap["ui/Keycap.qml & KeycapSurface.qml<br/>(Skin Geometry, Press Effect, Repeat Badge)"]
+        KeyIcon["ui/KeyIcon.qml<br/>(Canvas 2D Vector Path Renderer)"]
+
+        Overlay --> Group
+        Group --> Keycap
+        Keycap --> KeyIcon
+    end
+
+    %% Cross-subgraph connections
+    KernelDev -->|evdev events| LibinputProc
+    LibinputProc -->|stdout text lines| Daemon
+    Daemon -->|Raw lines| InputParse
+    InputParse -->|Tokens| Daemon
+    Daemon -->|Raw codes| KeyMapper
+    KeyMapper -->|Display labels| Daemon
+    Daemon -->|Actions & Config| Events
+    Events -->|Immutable State Snapshot| Daemon
+    Daemon -->|historyList Projection| ListModelSync
+    ListModelSync -->|Reconciled Model Updates| Overlay
+    Daemon -.->|Inject Style Params & Geometry| GroupFrame
+    Daemon -.->|Inject Focused Output| OverlayLayout
+    GroupFrame -.->|Dimensions & Margins| Group
+    OverlayLayout -.->|Screen Geometry| Overlay
+    KeyStyle -.->|Color & Dimensions| Keycap
+    Motion -.->|Transitions & Timers| Overlay
+    KeyIcons -.->|Vector Paths| KeyIcon
