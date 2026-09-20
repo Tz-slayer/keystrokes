@@ -1,1 +1,7 @@
+# Local assistant workspace state (notes, scratch) -- not part of the plugin
 .workbuddy-ai/
+
+# Obsidian vault state: editor layout, open panes, per-user appearance.
+# None of it is meaningful to someone who clones the plugin, and workspace.json
+# is rewritten on every vault open -- committing it would churn every diff.
+.obsidian/

@@ -14,11 +14,15 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-// README plus everything in docs/. The manual is organised general-to-specific:
-// docs/index.md is the hub and every other file hangs off it, so a stale link
-// there is the difference between a map and a dead end.
+// Every hand-written markdown file in the repository. The top-level ones are
+// listed explicitly: AGENTS.md is the first thing a coding agent reads, and
+// CHANGELOG.md is what a user reads before upgrading, so a link that rots in
+// either costs as much as one that rots in the manual. docs/ stays globbed so a
+// new chapter is covered the moment it is added.
 const DOCS = [
     "README.md",
+    "AGENTS.md",
+    "CHANGELOG.md",
     ...fs
         .readdirSync(path.join(ROOT, "docs"))
         .filter((f) => f.endsWith(".md"))
