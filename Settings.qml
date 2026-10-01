@@ -399,6 +399,6 @@ import "core/keyStyle.js" as KeyStyle
     }
 
     PluginAbout {
-        repoUrl: "https://github.com/hthienloc/dms-keystrokes"
+        repoUrl: "https://github.com/Tz-slayer/keystrokes"
     }
 }
